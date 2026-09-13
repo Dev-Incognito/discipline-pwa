@@ -73,7 +73,42 @@ async function runMigration() {
         requirement_type TEXT NOT NULL,
         requirement_value TEXT NOT NULL,
         xp_reward INTEGER NOT NULL DEFAULT 50,
+        display_order INTEGER NOT NULL DEFAULT 1,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    // Rank definitions table
+    await sql`
+      CREATE TABLE IF NOT EXISTS rank_definitions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        icon TEXT NOT NULL,
+        logo_url TEXT,
+        min_xp INTEGER NOT NULL,
+        display_order INTEGER NOT NULL,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        badge_color TEXT NOT NULL DEFAULT 'text-amber-400 bg-amber-950/80 border-amber-700',
+        glow_color TEXT NOT NULL DEFAULT 'shadow-amber-500/20',
+        rank_up_message TEXT NOT NULL DEFAULT 'A new rank has been unlocked!',
+        celebration_video_url TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    // App settings table
+    await sql`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        id TEXT PRIMARY KEY,
+        key TEXT NOT NULL UNIQUE,
+        value TEXT NOT NULL,
+        value_type TEXT NOT NULL DEFAULT 'string',
+        category TEXT NOT NULL DEFAULT 'general',
+        description TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `;
 
@@ -96,7 +131,7 @@ async function runMigration() {
         sound_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         haptics_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         reminder_time TEXT,
-        theme TEXT NOT NULL DEFAULT 'dark',
+        theme TEXT NOT NULL DEFAULT 'onyx',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
@@ -118,6 +153,9 @@ async function runMigration() {
     await sql`CREATE INDEX IF NOT EXISTS idx_checkins_date ON daily_checkins(date);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_weekly_user_id ON weekly_progress(user_id);`;
     await sql`CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_ranks_order ON rank_definitions(display_order);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_ranks_min_xp ON rank_definitions(min_xp);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_settings_category ON app_settings(category);`;
 
     console.log('Schema migration applied successfully!');
   } catch (error) {
