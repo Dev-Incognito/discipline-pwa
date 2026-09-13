@@ -18,6 +18,8 @@ export interface AdminSessionPayload {
   authenticatedAt: number;
 }
 
+const isSecure = process.env.NODE_ENV === 'production' && process.env.VERCEL === '1';
+
 /**
  * Creates a signed JWT for a user and sets the HTTP-only cookie
  */
@@ -31,7 +33,7 @@ export async function createUserSession(userId: string): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(USER_SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -81,7 +83,7 @@ export async function createAdminSession(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
     maxAge: 2 * 60 * 60, // 2 hours
