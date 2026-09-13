@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0e1424" />
+      <stop offset="50%" stop-color="#080b11" />
+      <stop offset="100%" stop-color="#05070a" />
+    </linearGradient>
+    <linearGradient id="flameGrad512" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#dc2626" />
+      <stop offset="40%" stop-color="#ea580c" />
+      <stop offset="80%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fef08a" />
+    </linearGradient>
+    <filter id="glow512" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="14" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background with subtle metallic border -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad512)" />
+  <rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="#f59e0b" stroke-opacity="0.35" stroke-width="6" />
+
+  <!-- Shield Shape -->
+  <path d="M256 76 L380 124 C380 262 326 364 256 418 C186 364 132 262 132 124 Z" fill="#131b2e" stroke="#f59e0b" stroke-width="8" stroke-linejoin="round" />
+
+  <!-- Glowing Flame -->
+  <g filter="url(#glow512)">
+    <path d="M256 138 C278 186 316 224 316 272 C316 320 284 352 256 364 C228 352 196 320 196 272 C196 234 224 202 256 138 Z" fill="url(#flameGrad512)" />
+    <!-- Inner Flame Core -->
+    <path d="M256 218 C266 244 282 272 282 298 C282 324 266 342 256 346 C246 342 230 324 230 298 C230 272 246 244 256 218 Z" fill="#ffffff" opacity="0.9" />
+  </g>
+</svg>

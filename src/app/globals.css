@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+:root, [data-theme="onyx"] {
+  --background: #080b11;
+  --surface: #0f1422;
+  --surface-elevated: #161e31;
+  --surface-border: #1f2a44;
+  --foreground: #f3f4f6;
+  --muted: #94a3b8;
+  --primary: #f59e0b;
+  --primary-glow: rgba(245, 158, 11, 0.25);
+  --gradient-bg: linear-gradient(180deg, #080b11 0%, #0d121c 100%);
+  --theme-accent: #f59e0b;
+}
+
+[data-theme="emerald"] {
+  --background: #040d0a;
+  --surface: #071a14;
+  --surface-elevated: #0b261e;
+  --surface-border: #12382c;
+  --foreground: #ecfdf5;
+  --muted: #6ee7b7;
+  --primary: #10b981;
+  --primary-glow: rgba(16, 185, 129, 0.3);
+  --gradient-bg: linear-gradient(180deg, #040d0a 0%, #061e16 100%);
+  --theme-accent: #10b981;
+}
+
+[data-theme="crimson"] {
+  --background: #0d0406;
+  --surface: #1a080d;
+  --surface-elevated: #280e15;
+  --surface-border: #3b1420;
+  --foreground: #fff1f2;
+  --muted: #fda4af;
+  --primary: #f43f5e;
+  --primary-glow: rgba(244, 63, 94, 0.3);
+  --gradient-bg: linear-gradient(180deg, #0d0406 0%, #200810 100%);
+  --theme-accent: #f43f5e;
+}
+
+[data-theme="amethyst"] {
+  --background: #0a0612;
+  --surface: #140d24;
+  --surface-elevated: #1f1438;
+  --surface-border: #2e1e52;
+  --foreground: #faf5ff;
+  --muted: #d8b4fe;
+  --primary: #a855f7;
+  --primary-glow: rgba(168, 85, 247, 0.3);
+  --gradient-bg: linear-gradient(180deg, #0a0612 0%, #190e30 100%);
+  --theme-accent: #a855f7;
+}
+
+[data-theme="solar"] {
+  --background: #0d0803;
+  --surface: #1a1006;
+  --surface-elevated: #291a0a;
+  --surface-border: #3d2710;
+  --foreground: #fff7ed;
+  --muted: #fdba74;
+  --primary: #f97316;
+  --primary-glow: rgba(249, 115, 22, 0.3);
+  --gradient-bg: linear-gradient(180deg, #0d0803 0%, #241405 100%);
+  --theme-accent: #f97316;
+}
+
+[data-theme="aurora"] {
+  --background: #030a12;
+  --surface: #061424;
+  --surface-elevated: #091f38;
+  --surface-border: #0e2f54;
+  --foreground: #ecfeff;
+  --muted: #67e8f9;
+  --primary: #06b6d4;
+  --primary-glow: rgba(6, 182, 212, 0.3);
+  --gradient-bg: linear-gradient(180deg, #030a12 0%, #061c33 100%);
+  --theme-accent: #06b6d4;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* iOS Safe Areas */
+.pt-safe {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+.pb-safe {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+.pb-safe-nav {
+  padding-bottom: calc(5rem + max(1rem, env(safe-area-inset-bottom)));
+}
+
+/* Custom glow animations */
+@keyframes pulse-flame {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.5));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(239, 68, 68, 0.7));
+    transform: scale(1.05);
+  }
+}
+
+.animate-flame {
+  animation: pulse-flame 2.5s ease-in-out infinite;
+}
+
+@keyframes breathe-circle {
+  0%, 100% {
+    transform: scale(0.85);
+    opacity: 0.6;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+    box-shadow: 0 0 45px rgba(59, 130, 246, 0.6);
+  }
+}
+
+.animate-breathe {
+  animation: breathe-circle 8s ease-in-out infinite;
+}
+
+/* Prevent unwanted pull-to-refresh on iPhone Safari when inside PWA */
+html, body {
+  position: relative;
+  overflow-x: hidden;
+  min-height: 100%;
+}
