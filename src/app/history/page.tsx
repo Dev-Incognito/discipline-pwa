@@ -1,14 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getHistoryAction } from '@/actions/checkinActions';
+import { getUserGoalsAction } from '@/actions/goalActions';
+import { Goal } from '@/db/schema';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { ChevronLeft, ChevronRight, CheckCircle2, Lock, MessageSquare, Loader2 } from 'lucide-react';
+import { sound } from '@/lib/sound/sound';
 
 interface CheckinRecord {
   id: string;
   date: string;
+  goalId?: string | null;
   completed: boolean;
   mood: string | null;
   journalNote: string | null;
@@ -17,21 +21,30 @@ interface CheckinRecord {
 
 export default function HistoryPage() {
   const [records, setRecords] = useState<CheckinRecord[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [selectedGoalId, setSelectedGoalId] = useState<string>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedRecord, setSelectedRecord] = useState<CheckinRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      setIsLoading(true);
-      const res = await getHistoryAction();
-      if (res.success && res.data) {
-        setRecords(res.data as CheckinRecord[]);
-      }
-      setIsLoading(false);
+  const loadData = useCallback(async (goalId: string) => {
+    setIsLoading(true);
+    const [histRes, goalsRes] = await Promise.all([
+      getHistoryAction(goalId === 'all' ? undefined : goalId),
+      getUserGoalsAction(),
+    ]);
+    if (histRes.success && histRes.data) {
+      setRecords(histRes.data as CheckinRecord[]);
     }
-    load();
+    if (goalsRes.success && goalsRes.data) {
+      setGoals(goalsRes.data as Goal[]);
+    }
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadData(selectedGoalId);
+  }, [selectedGoalId, loadData]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); // 0-indexed
@@ -81,6 +94,42 @@ export default function HistoryPage() {
       <Header currentRank="History" />
 
       <main className="flex-1 space-y-4 px-4 py-4">
+        {/* Habit Track Filter */}
+        {goals.length > 0 && (
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 no-scrollbar touch-pan-x">
+            <button
+              onClick={() => {
+                sound.playClick();
+                setSelectedGoalId('all');
+              }}
+              className={`flex shrink-0 items-center space-x-1.5 rounded-xl px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all active:scale-95 border ${
+                selectedGoalId === 'all'
+                  ? 'bg-amber-500 text-black border-amber-500 shadow-md shadow-amber-500/20'
+                  : 'bg-gray-900/80 text-gray-400 border-gray-800 hover:border-gray-700 hover:text-gray-200'
+              }`}
+            >
+              <span>⚡ All Habits</span>
+            </button>
+            {goals.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => {
+                  sound.playClick();
+                  setSelectedGoalId(g.id);
+                }}
+                className={`flex shrink-0 items-center space-x-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 border ${
+                  selectedGoalId === g.id
+                    ? 'bg-amber-500 text-black border-amber-500 shadow-md shadow-amber-500/20'
+                    : 'bg-gray-900/80 text-gray-400 border-gray-800 hover:border-gray-700 hover:text-gray-200'
+                }`}
+              >
+                <span>{g.icon}</span>
+                <span className="truncate max-w-[120px]">{g.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Month Selector Card */}
         <div className="flex items-center justify-between rounded-2xl bg-[#0f1422] border border-gray-800/80 p-4">
           <button

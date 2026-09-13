@@ -11,6 +11,8 @@ interface CheckinButtonProps {
   todayDate: string;
   isCompleted: boolean;
   todayMood?: string | null;
+  goalId?: string | null;
+  goalTitle?: string;
   onCheckinSuccess: (result: CheckinResult) => void;
   onOpenReflectionModal: () => void;
 }
@@ -19,6 +21,8 @@ export function CheckinButton({
   todayDate,
   isCompleted,
   todayMood,
+  goalId,
+  goalTitle,
   onCheckinSuccess,
   onOpenReflectionModal,
 }: CheckinButtonProps) {
@@ -35,6 +39,7 @@ export function CheckinButton({
     try {
       const res = await submitCheckinAction({
         date: todayDate,
+        goalId,
       });
 
       if (res.success && res.data) {
@@ -108,7 +113,7 @@ export function CheckinButton({
             <Check className="h-5 w-5 stroke-[3] text-gray-950" />
           </div>
           <span className="text-base font-extrabold tracking-widest text-gray-950">
-            CHECK IN TODAY
+            {goalTitle ? `LOG ${goalTitle.toUpperCase()}` : 'CHECK IN TODAY'}
           </span>
           <Flame className="h-5 w-5 text-gray-950/80 group-hover:scale-110 transition-transform" />
         </div>

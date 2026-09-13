@@ -7,9 +7,11 @@ import {
   deleteRankAction,
   reorderRanksAction,
   getAvailableRankLogosAction,
+  saveRawRanksJsonAction,
 } from '@/actions/adminActions';
 import { RankDefinition } from '@/lib/gamification/ranks';
 import { RankPreviewCard } from '@/components/admin/RankPreviewCard';
+import { RawJsonEditorModal } from '@/components/admin/RawJsonEditorModal';
 import {
   Plus,
   Edit2,
@@ -19,6 +21,7 @@ import {
   AlertCircle,
   X,
   CheckCircle2,
+  Code2,
 } from 'lucide-react';
 import Image from 'next/image';
 import { sound } from '@/lib/sound/sound';
@@ -28,6 +31,7 @@ export default function AdminRanksPage() {
   const [availableLogos, setAvailableLogos] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [showJsonModal, setShowJsonModal] = useState(false);
 
   // Edit / Create Modal state
   const [showModal, setShowModal] = useState(false);
@@ -201,14 +205,27 @@ export default function AdminRanksPage() {
             Configure dynamic progression ranks, XP thresholds, custom logos &amp; celebratory rank-up messages
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenCreate}
-          className="inline-flex items-center space-x-2 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-black shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:bg-amber-400 transition-all uppercase tracking-wider active:scale-95"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Create New Rank</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => {
+              sound.playClick();
+              setShowJsonModal(true);
+            }}
+            className="inline-flex items-center space-x-2 rounded-xl border border-gray-700 bg-gray-800/80 px-4 py-2.5 text-xs font-bold text-gray-200 hover:bg-gray-700 hover:text-white transition-all uppercase tracking-wider active:scale-95"
+          >
+            <Code2 className="h-4 w-4 text-amber-400" />
+            <span>Raw JSON</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="inline-flex items-center space-x-2 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-black shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:bg-amber-400 transition-all uppercase tracking-wider active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create New Rank</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -514,6 +531,22 @@ export default function AdminRanksPage() {
           </div>
         </div>
       )}
+
+      {/* Raw JSON Editor Modal */}
+      <RawJsonEditorModal
+        isOpen={showJsonModal}
+        onClose={() => setShowJsonModal(false)}
+        title="Raw JSON Editor — Ranks Hierarchy"
+        initialJson={JSON.stringify(ranks, null, 2)}
+        onSave={async (json) => {
+          const res = await saveRawRanksJsonAction(json);
+          if (res.success) {
+            showSuccess('Ranks JSON successfully applied to database!');
+            await loadData();
+          }
+          return res;
+        }}
+      />
     </div>
   );
 }

@@ -168,25 +168,257 @@ export const dataService = {
   },
 
   // ----------------------------------------------------
+  // GOALS & HABITS MANAGEMENT
+  // ----------------------------------------------------
+  async getUserGoals(userId: string): Promise<schema.Goal[]> {
+    if (isPostgresConfigured() && db) {
+      const list = await db
+        .select()
+        .from(schema.goals)
+        .where(and(eq(schema.goals.userId, userId), eq(schema.goals.archived, false)))
+        .orderBy(asc(schema.goals.createdAt));
+
+      if (list.length > 0) return list;
+
+      // Auto-create default goal if user has none
+      const user = await this.getUserById(userId);
+      const newGoalId = crypto.randomUUID();
+      const defaultGoalList = await db
+        .insert(schema.goals)
+        .values({
+          id: newGoalId,
+          userId,
+          title: 'Primary Discipline',
+          description: 'Main habit and self-control tracker',
+          icon: '⚔️',
+          color: 'amber',
+          targetDaysPerWeek: user?.weeklyGoal || 6,
+          currentStreak: user?.currentStreak || 0,
+          longestStreak: user?.longestStreak || 0,
+          totalSuccessfulDays: user?.totalSuccessfulDays || 0,
+          lastCheckinDate: user?.lastCheckinDate || null,
+        })
+        .returning();
+
+      const defaultGoal = defaultGoalList[0];
+
+      // Link any orphan checkins for this user to default goal
+      await db
+        .update(schema.dailyCheckins)
+        .set({ goalId: defaultGoal.id })
+        .where(and(eq(schema.dailyCheckins.userId, userId), sql`${schema.dailyCheckins.goalId} IS NULL`));
+
+      await db
+        .update(schema.weeklyProgress)
+        .set({ goalId: defaultGoal.id })
+        .where(and(eq(schema.weeklyProgress.userId, userId), sql`${schema.weeklyProgress.goalId} IS NULL`));
+
+      return [defaultGoal];
+    } else {
+      const data = readLocalData();
+      const list = (data.goals || []).filter((g) => g.userId === userId && !g.archived);
+      if (list.length > 0) return list as unknown as schema.Goal[];
+
+      const user = data.users.find((u) => u.id === userId);
+      const defaultGoal = {
+        id: crypto.randomUUID(),
+        userId,
+        title: 'Primary Discipline',
+        description: 'Main habit and self-control tracker',
+        icon: '⚔️',
+        color: 'amber',
+        targetDaysPerWeek: user?.weeklyGoal || 6,
+        currentStreak: user?.currentStreak || 0,
+        longestStreak: user?.longestStreak || 0,
+        totalSuccessfulDays: user?.totalSuccessfulDays || 0,
+        lastCheckinDate: user?.lastCheckinDate || null,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      if (!data.goals) data.goals = [];
+      data.goals.push(defaultGoal);
+
+      data.dailyCheckins.forEach((c) => {
+        if (c.userId === userId && !c.goalId) {
+          c.goalId = defaultGoal.id;
+        }
+      });
+      data.weeklyProgress.forEach((w) => {
+        if (w.userId === userId && !w.goalId) {
+          w.goalId = defaultGoal.id;
+        }
+      });
+
+      writeLocalData(data);
+      return [defaultGoal as unknown as schema.Goal];
+    }
+  },
+
+  async getGoalById(goalId: string): Promise<schema.Goal | null> {
+    if (isPostgresConfigured() && db) {
+      const result = await db
+        .select()
+        .from(schema.goals)
+        .where(eq(schema.goals.id, goalId))
+        .limit(1);
+      return result[0] || null;
+    } else {
+      const data = readLocalData();
+      const g = (data.goals || []).find((item) => item.id === goalId);
+      return (g as unknown as schema.Goal) || null;
+    }
+  },
+
+  async createGoal(
+    userId: string,
+    data: {
+      title: string;
+      description?: string | null;
+      icon?: string;
+      color?: string;
+      targetDaysPerWeek?: number;
+    }
+  ): Promise<schema.Goal> {
+    const goalId = crypto.randomUUID();
+    const icon = data.icon?.trim() || '⚔️';
+    const color = data.color?.trim() || 'amber';
+    const targetDays = Math.max(1, Math.min(7, data.targetDaysPerWeek || 6));
+    const title = data.title.trim();
+
+    if (isPostgresConfigured() && db) {
+      const [inserted] = await db
+        .insert(schema.goals)
+        .values({
+          id: goalId,
+          userId,
+          title,
+          description: data.description ? data.description.trim() : null,
+          icon,
+          color,
+          targetDaysPerWeek: targetDays,
+          currentStreak: 0,
+          longestStreak: 0,
+          totalSuccessfulDays: 0,
+        })
+        .returning();
+      return inserted;
+    } else {
+      const local = readLocalData();
+      if (!local.goals) local.goals = [];
+      const newGoal = {
+        id: goalId,
+        userId,
+        title,
+        description: data.description ? data.description.trim() : null,
+        icon,
+        color,
+        targetDaysPerWeek: targetDays,
+        currentStreak: 0,
+        longestStreak: 0,
+        totalSuccessfulDays: 0,
+        lastCheckinDate: null,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      local.goals.push(newGoal);
+      writeLocalData(local);
+      return newGoal as unknown as schema.Goal;
+    }
+  },
+
+  async updateGoal(
+    userId: string,
+    goalId: string,
+    updates: {
+      title?: string;
+      description?: string | null;
+      icon?: string;
+      color?: string;
+      targetDaysPerWeek?: number;
+      archived?: boolean;
+    }
+  ): Promise<schema.Goal | null> {
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    if (updates.title !== undefined) updateData.title = updates.title.trim();
+    if (updates.description !== undefined) updateData.description = updates.description?.trim() || null;
+    if (updates.icon !== undefined) updateData.icon = updates.icon.trim();
+    if (updates.color !== undefined) updateData.color = updates.color.trim();
+    if (updates.targetDaysPerWeek !== undefined) {
+      updateData.targetDaysPerWeek = Math.max(1, Math.min(7, updates.targetDaysPerWeek));
+    }
+    if (updates.archived !== undefined) updateData.archived = updates.archived;
+
+    if (isPostgresConfigured() && db) {
+      const [updated] = await db
+        .update(schema.goals)
+        .set(updateData)
+        .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
+        .returning();
+      return updated || null;
+    } else {
+      const local = readLocalData();
+      const g = (local.goals || []).find((goal) => goal.id === goalId && goal.userId === userId);
+      if (!g) return null;
+      if (updates.title !== undefined) g.title = updates.title.trim();
+      if (updates.description !== undefined) g.description = updates.description?.trim() || null;
+      if (updates.icon !== undefined) g.icon = updates.icon.trim();
+      if (updates.color !== undefined) g.color = updates.color.trim();
+      if (updates.targetDaysPerWeek !== undefined) {
+        g.targetDaysPerWeek = Math.max(1, Math.min(7, updates.targetDaysPerWeek));
+      }
+      if (updates.archived !== undefined) g.archived = updates.archived;
+      g.updatedAt = new Date().toISOString();
+      writeLocalData(local);
+      return g as unknown as schema.Goal;
+    }
+  },
+
+  async deleteGoal(userId: string, goalId: string): Promise<boolean> {
+    if (isPostgresConfigured() && db) {
+      await db
+        .delete(schema.goals)
+        .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)));
+      return true;
+    } else {
+      const local = readLocalData();
+      local.goals = (local.goals || []).filter((g) => !(g.id === goalId && g.userId === userId));
+      local.dailyCheckins = local.dailyCheckins.filter(
+        (c) => !(c.goalId === goalId && c.userId === userId)
+      );
+      writeLocalData(local);
+      return true;
+    }
+  },
+
+  // ----------------------------------------------------
   // DAILY CHECK-IN PROCESSOR
   // ----------------------------------------------------
   async processCheckin(
     userId: string,
     todayDate: string,
     mood?: string | null,
-    journalNote?: string | null
-  ): Promise<CheckinResult> {
+    journalNote?: string | null,
+    goalId?: string | null
+  ): Promise<CheckinResult & { goalDetails?: schema.Goal }> {
     const user = await this.getUserById(userId);
     if (!user) {
       throw new Error('User not found');
     }
 
-    // Evaluate streak continuity
+    const userGoals = await this.getUserGoals(userId);
+    const targetGoal = (goalId ? userGoals.find((g) => g.id === goalId) : null) || userGoals[0];
+    if (!targetGoal) {
+      throw new Error('No active goal found');
+    }
+
+    // Evaluate streak continuity on the specific goal
     const streakEval = evaluateStreak(
-      user.currentStreak,
-      user.longestStreak,
-      user.totalSuccessfulDays,
-      user.lastCheckinDate,
+      targetGoal.currentStreak,
+      targetGoal.longestStreak,
+      targetGoal.totalSuccessfulDays,
+      targetGoal.lastCheckinDate,
       todayDate
     );
 
@@ -202,13 +434,14 @@ export const dataService = {
           weeklyBonus: 0,
           achievementBonus: 0,
         },
-        newStreak: user.currentStreak,
-        newLongestStreak: user.longestStreak,
-        newTotalDays: user.totalSuccessfulDays,
+        newStreak: targetGoal.currentStreak,
+        newLongestStreak: targetGoal.longestStreak,
+        newTotalDays: targetGoal.totalSuccessfulDays,
         currentRank: user.currentRank,
         previousRank: user.currentRank,
         didRankUp: false,
         unlockedAchievements: [],
+        goalDetails: targetGoal,
       };
     }
 
@@ -230,23 +463,24 @@ export const dataService = {
 
     const weekStart = getMondayOfWeek(todayDate);
 
-    // Record checkin and calculate weekly progress
+    // Record checkin and calculate weekly progress for this goal
     let completedDaysInWeek = 1;
     let bonusAlreadyAwarded = false;
 
     if (isPostgresConfigured() && db) {
-      // 1. Insert checkin
+      // 1. Insert checkin for goal
       await db
         .insert(schema.dailyCheckins)
         .values({
           userId,
+          goalId: targetGoal.id,
           date: todayDate,
           completed: true,
           mood: mood || null,
           journalNote: journalNote ? journalNote.slice(0, 280) : null,
         })
         .onConflictDoUpdate({
-          target: [schema.dailyCheckins.userId, schema.dailyCheckins.date],
+          target: [schema.dailyCheckins.userId, schema.dailyCheckins.goalId, schema.dailyCheckins.date],
           set: {
             completed: true,
             mood: mood || null,
@@ -255,7 +489,7 @@ export const dataService = {
           },
         });
 
-      // 2. Fetch existing weekly progress and count distinct completed days in this week
+      // 2. Fetch existing weekly progress and count distinct completed days in this week for this goal
       const weekDates = getWeekDates(weekStart);
       const weekCheckins = await db
         .select({ date: schema.dailyCheckins.date })
@@ -263,6 +497,7 @@ export const dataService = {
         .where(
           and(
             eq(schema.dailyCheckins.userId, userId),
+            eq(schema.dailyCheckins.goalId, targetGoal.id),
             eq(schema.dailyCheckins.completed, true)
           )
         );
@@ -279,6 +514,7 @@ export const dataService = {
         .where(
           and(
             eq(schema.weeklyProgress.userId, userId),
+            eq(schema.weeklyProgress.goalId, targetGoal.id),
             eq(schema.weeklyProgress.weekStart, weekStart)
           )
         )
@@ -288,38 +524,57 @@ export const dataService = {
         bonusAlreadyAwarded = existingWeekly[0].bonusAwarded;
       }
 
-      const goalMet = completedDaysInWeek >= user.weeklyGoal;
+      const goalMet = completedDaysInWeek >= targetGoal.targetDaysPerWeek;
       const shouldAwardWeeklyBonus = goalMet && !bonusAlreadyAwarded;
       if (shouldAwardWeeklyBonus) {
         weeklyBonusEarned = xpConfig.weeklyGoalXp;
         totalXpEarned += weeklyBonusEarned;
       }
 
-      // Upsert weekly progress
+      // Upsert weekly progress for this goal
       await db
         .insert(schema.weeklyProgress)
         .values({
           userId,
+          goalId: targetGoal.id,
           weekStart,
           completedDays: completedDaysInWeek,
-          weeklyGoal: user.weeklyGoal,
+          weeklyGoal: targetGoal.targetDaysPerWeek,
           weekCompleted: goalMet,
           bonusAwarded: bonusAlreadyAwarded || shouldAwardWeeklyBonus,
         })
         .onConflictDoUpdate({
-          target: [schema.weeklyProgress.userId, schema.weeklyProgress.weekStart],
+          target: [schema.weeklyProgress.userId, schema.weeklyProgress.goalId, schema.weeklyProgress.weekStart],
           set: {
             completedDays: completedDaysInWeek,
+            weeklyGoal: targetGoal.targetDaysPerWeek,
             weekCompleted: goalMet,
             bonusAwarded: bonusAlreadyAwarded || shouldAwardWeeklyBonus,
             updatedAt: new Date(),
           },
         });
+
+      // 3. Update the goal's own streaks
+      await db
+        .update(schema.goals)
+        .set({
+          currentStreak: streakEval.newStreak,
+          longestStreak: streakEval.newLongestStreak,
+          totalSuccessfulDays: streakEval.newTotalDays,
+          lastCheckinDate: todayDate,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.goals.id, targetGoal.id));
+
+      targetGoal.currentStreak = streakEval.newStreak;
+      targetGoal.longestStreak = streakEval.newLongestStreak;
+      targetGoal.totalSuccessfulDays = streakEval.newTotalDays;
+      targetGoal.lastCheckinDate = todayDate;
     } else {
       // Local store path
       const data = readLocalData();
       const existingIdx = data.dailyCheckins.findIndex(
-        (c) => c.userId === userId && c.date === todayDate
+        (c) => c.userId === userId && c.goalId === targetGoal.id && c.date === todayDate
       );
       const now = new Date().toISOString();
 
@@ -332,6 +587,7 @@ export const dataService = {
         data.dailyCheckins.push({
           id: crypto.randomUUID(),
           userId,
+          goalId: targetGoal.id,
           date: todayDate,
           completed: true,
           mood: mood || null,
@@ -341,21 +597,29 @@ export const dataService = {
         });
       }
 
+      const weekDates = getWeekDates(weekStart);
+      const distinctDates = new Set(
+        data.dailyCheckins
+          .filter((c) => c.userId === userId && c.goalId === targetGoal.id && c.completed && weekDates.includes(c.date))
+          .map((c) => c.date)
+      );
+      distinctDates.add(todayDate);
+      completedDaysInWeek = distinctDates.size;
+
       let weekly = data.weeklyProgress.find(
-        (w) => w.userId === userId && w.weekStart === weekStart
+        (w) => w.userId === userId && w.goalId === targetGoal.id && w.weekStart === weekStart
       );
 
       if (weekly) {
-        weekly.completedDays += 1;
-        completedDaysInWeek = weekly.completedDays;
         bonusAlreadyAwarded = weekly.bonusAwarded;
       } else {
         weekly = {
           id: crypto.randomUUID(),
           userId,
+          goalId: targetGoal.id,
           weekStart,
           completedDays: 1,
-          weeklyGoal: user.weeklyGoal,
+          weeklyGoal: targetGoal.targetDaysPerWeek,
           weekCompleted: false,
           bonusAwarded: false,
           createdAt: now,
@@ -364,20 +628,31 @@ export const dataService = {
         data.weeklyProgress.push(weekly);
       }
 
-      const goalMet = completedDaysInWeek >= user.weeklyGoal;
+      const goalMet = completedDaysInWeek >= targetGoal.targetDaysPerWeek;
       const shouldAwardWeeklyBonus = goalMet && !bonusAlreadyAwarded;
       if (shouldAwardWeeklyBonus) {
         weeklyBonusEarned = xpConfig.weeklyGoalXp;
         totalXpEarned += weeklyBonusEarned;
         weekly.bonusAwarded = true;
       }
+      weekly.completedDays = completedDaysInWeek;
       weekly.weekCompleted = goalMet;
       weekly.updatedAt = now;
+
+      // Update goal in local store
+      const localGoal = (data.goals || []).find((g) => g.id === targetGoal.id);
+      if (localGoal) {
+        localGoal.currentStreak = streakEval.newStreak;
+        localGoal.longestStreak = streakEval.newLongestStreak;
+        localGoal.totalSuccessfulDays = streakEval.newTotalDays;
+        localGoal.lastCheckinDate = todayDate;
+        localGoal.updatedAt = now;
+      }
 
       writeLocalData(data);
     }
 
-    // Dynamic Ranks Evaluation
+    // Dynamic Ranks Evaluation (User lifetime XP & rank)
     const rankDefs = await this.getRankDefinitions();
     const tentativeXp = user.currentXp + totalXpEarned;
     const previousRank = user.currentRank;
@@ -405,7 +680,7 @@ export const dataService = {
         .where(eq(schema.userAchievements.userId, userId));
       existingUnlocks.forEach((u) => alreadyUnlockedIds.add(u.achievementId));
 
-      // Fetch completed weekly goals count
+      // Fetch completed weekly goals count across all goals
       const weeks = await db
         .select({ count: count() })
         .from(schema.weeklyProgress)
@@ -431,11 +706,11 @@ export const dataService = {
     const newAchievements = checkNewAchievements(
       {
         streak: streakEval.newStreak,
-        longestStreak: streakEval.newLongestStreak,
-        totalDays: streakEval.newTotalDays,
+        longestStreak: Math.max(user.longestStreak, streakEval.newLongestStreak),
+        totalDays: user.totalSuccessfulDays + 1,
         completedWeeklyGoals: completedWeeklyGoalsCount,
-        totalXp: tentativeXp,
         currentRank: newRank,
+        totalXp: tentativeXp,
       },
       alreadyUnlockedIds,
       achDefs
@@ -463,8 +738,8 @@ export const dataService = {
               achievementId: ach.id,
             })
             .onConflictDoNothing();
-        } catch (achErr) {
-          console.error('Achievement unlock recording error:', achErr);
+        } catch {
+          // ignore duplicate
         }
       } else {
         const data = readLocalData();
@@ -490,8 +765,8 @@ export const dataService = {
         .set({
           currentXp: finalXp,
           currentStreak: streakEval.newStreak,
-          longestStreak: streakEval.newLongestStreak,
-          totalSuccessfulDays: streakEval.newTotalDays,
+          longestStreak: Math.max(user.longestStreak, streakEval.newLongestStreak),
+          totalSuccessfulDays: user.totalSuccessfulDays + 1,
           currentRank: finalRank,
           lastCheckinDate: todayDate,
           updatedAt: new Date(),
@@ -503,8 +778,8 @@ export const dataService = {
       if (u) {
         u.currentXp = finalXp;
         u.currentStreak = streakEval.newStreak;
-        u.longestStreak = streakEval.newLongestStreak;
-        u.totalSuccessfulDays = streakEval.newTotalDays;
+        u.longestStreak = Math.max(user.longestStreak, streakEval.newLongestStreak);
+        u.totalSuccessfulDays = user.totalSuccessfulDays + 1;
         u.currentRank = finalRank;
         u.lastCheckinDate = todayDate;
         u.updatedAt = new Date().toISOString();
@@ -536,6 +811,7 @@ export const dataService = {
       rankUpMessage: finalRankInfo.currentRank.rankUpMessage || 'New Rank Unlocked!',
       celebrationVideoUrl: finalRankInfo.currentRank.celebrationVideoUrl || settingsMap.celebration_video_url || '/videos/celebration.mp4',
       unlockedAchievements: unlockedAchievementsList,
+      goalDetails: targetGoal,
     };
   },
 
@@ -543,20 +819,26 @@ export const dataService = {
     userId: string,
     todayDate: string,
     mood?: string | null,
-    journalNote?: string | null
+    journalNote?: string | null,
+    goalId?: string | null
   ): Promise<{ success: boolean; error?: string }> {
+    const userGoals = await this.getUserGoals(userId);
+    const targetGoal = (goalId ? userGoals.find((g) => g.id === goalId) : null) || userGoals[0];
+    const targetGoalId = targetGoal?.id;
+
     if (isPostgresConfigured() && db) {
       await db
         .insert(schema.dailyCheckins)
         .values({
           userId,
+          goalId: targetGoalId,
           date: todayDate,
           completed: true,
           mood: mood || null,
           journalNote: journalNote ? journalNote.slice(0, 280) : null,
         })
         .onConflictDoUpdate({
-          target: [schema.dailyCheckins.userId, schema.dailyCheckins.date],
+          target: [schema.dailyCheckins.userId, schema.dailyCheckins.goalId, schema.dailyCheckins.date],
           set: {
             mood: mood || null,
             journalNote: journalNote ? journalNote.slice(0, 280) : null,
@@ -567,7 +849,7 @@ export const dataService = {
     } else {
       const data = readLocalData();
       const existingIdx = data.dailyCheckins.findIndex(
-        (c) => c.userId === userId && c.date === todayDate
+        (c) => c.userId === userId && c.goalId === targetGoalId && c.date === todayDate
       );
       const now = new Date().toISOString();
       if (existingIdx >= 0) {
@@ -578,6 +860,7 @@ export const dataService = {
         data.dailyCheckins.push({
           id: crypto.randomUUID(),
           userId,
+          goalId: targetGoalId,
           date: todayDate,
           completed: true,
           mood: mood || null,
@@ -594,9 +877,13 @@ export const dataService = {
   // ----------------------------------------------------
   // DASHBOARD DATA AGGREGATOR
   // ----------------------------------------------------
-  async getDashboardData(userId: string, todayDate: string) {
+  async getDashboardData(userId: string, todayDate: string, goalId?: string | null) {
     const user = await this.getUserById(userId);
     if (!user) return null;
+
+    const userGoals = await this.getUserGoals(userId);
+    const currentGoal = (goalId ? userGoals.find((g) => g.id === goalId) : null) || userGoals[0];
+    if (!currentGoal) return null;
 
     const rankDefs = await this.getRankDefinitions();
     const settingsMap = await this.getAppSettingsMap();
@@ -615,13 +902,14 @@ export const dataService = {
     let bonusAwarded = false;
 
     if (isPostgresConfigured() && db) {
-      // Check today's checkin
+      // Check today's checkin for currentGoal
       const todayCheckin = await db
         .select()
         .from(schema.dailyCheckins)
         .where(
           and(
             eq(schema.dailyCheckins.userId, userId),
+            eq(schema.dailyCheckins.goalId, currentGoal.id),
             eq(schema.dailyCheckins.date, todayDate)
           )
         )
@@ -640,6 +928,7 @@ export const dataService = {
         .where(
           and(
             eq(schema.weeklyProgress.userId, userId),
+            eq(schema.weeklyProgress.goalId, currentGoal.id),
             eq(schema.weeklyProgress.weekStart, weekStart)
           )
         )
@@ -648,16 +937,21 @@ export const dataService = {
         bonusAwarded = weekly[0].bonusAwarded;
       }
 
-      // Fetch all checkins for the week
+      // Fetch all checkins for the week for this goal
       const allCheckins = await db
         .select()
         .from(schema.dailyCheckins)
-        .where(eq(schema.dailyCheckins.userId, userId));
+        .where(
+          and(
+            eq(schema.dailyCheckins.userId, userId),
+            eq(schema.dailyCheckins.goalId, currentGoal.id)
+          )
+        );
       weekCheckins = allCheckins;
     } else {
       const data = readLocalData();
-      const todayCheckin = data.dailyCheckins.find(
-        (c) => c.userId === userId && c.date === todayDate
+      const todayCheckin = (data.dailyCheckins || []).find(
+        (c) => c.userId === userId && c.goalId === currentGoal.id && c.date === todayDate
       );
       if (todayCheckin && todayCheckin.completed) {
         isTodayCheckedIn = true;
@@ -665,14 +959,16 @@ export const dataService = {
         todayJournal = todayCheckin.journalNote;
       }
 
-      const weekly = data.weeklyProgress.find(
-        (w) => w.userId === userId && w.weekStart === weekStart
+      const weekly = (data.weeklyProgress || []).find(
+        (w) => w.userId === userId && w.goalId === currentGoal.id && w.weekStart === weekStart
       );
       if (weekly) {
         bonusAwarded = weekly.bonusAwarded;
       }
 
-      weekCheckins = data.dailyCheckins.filter((c) => c.userId === userId);
+      weekCheckins = (data.dailyCheckins || []).filter(
+        (c) => c.userId === userId && c.goalId === currentGoal.id
+      );
     }
 
     const completedDatesSet = new Set(
@@ -684,7 +980,7 @@ export const dataService = {
       weekStart,
       todayDate,
       completedDatesSet,
-      user.weeklyGoal,
+      currentGoal.targetDaysPerWeek,
       bonusAwarded,
       weeklyGoalBonusXp
     );
@@ -693,12 +989,14 @@ export const dataService = {
       user: {
         id: user.id,
         currentXp: user.currentXp,
-        currentStreak: user.currentStreak,
-        longestStreak: user.longestStreak,
-        totalSuccessfulDays: user.totalSuccessfulDays,
+        currentStreak: currentGoal.currentStreak,
+        longestStreak: currentGoal.longestStreak,
+        totalSuccessfulDays: currentGoal.totalSuccessfulDays,
         currentRank: rankInfo.currentRank.name,
-        weeklyGoal: user.weeklyGoal,
+        weeklyGoal: currentGoal.targetDaysPerWeek,
       },
+      currentGoal,
+      goals: userGoals,
       rankInfo,
       appSettings: settingsMap,
       isTodayCheckedIn,
@@ -711,18 +1009,22 @@ export const dataService = {
   // ----------------------------------------------------
   // HISTORY / CALENDAR DATA
   // ----------------------------------------------------
-  async getHistoryData(userId: string) {
+  async getHistoryData(userId: string, goalId?: string | null) {
     if (isPostgresConfigured() && db) {
+      const conditions = [eq(schema.dailyCheckins.userId, userId)];
+      if (goalId && goalId !== 'all') {
+        conditions.push(eq(schema.dailyCheckins.goalId, goalId));
+      }
       const checkins = await db
         .select()
         .from(schema.dailyCheckins)
-        .where(eq(schema.dailyCheckins.userId, userId))
+        .where(and(...conditions))
         .orderBy(desc(schema.dailyCheckins.date));
       return checkins;
     } else {
       const data = readLocalData();
-      return data.dailyCheckins
-        .filter((c) => c.userId === userId)
+      return (data.dailyCheckins || [])
+        .filter((c) => c.userId === userId && (!goalId || goalId === 'all' || c.goalId === goalId))
         .sort((a, b) => b.date.localeCompare(a.date));
     }
   },
@@ -730,37 +1032,49 @@ export const dataService = {
   // ----------------------------------------------------
   // STATS DATA
   // ----------------------------------------------------
-  async getStatsData(userId: string) {
+  async getStatsData(userId: string, goalId?: string | null) {
     const user = await this.getUserById(userId);
     if (!user) return null;
 
     const rankDefs = await this.getRankDefinitions();
     const rankInfo = getRankFromXp(user.currentXp, rankDefs);
 
+    const userGoals = await this.getUserGoals(userId);
+    const activeGoal = goalId && goalId !== 'all' ? userGoals.find((g) => g.id === goalId) || userGoals[0] : null;
+
     let checkins: Array<{ date: string; completed: boolean; mood: string | null }> = [];
     let completedWeeksCount = 0;
 
     if (isPostgresConfigured() && db) {
+      const conditions = [eq(schema.dailyCheckins.userId, userId)];
+      if (activeGoal) {
+        conditions.push(eq(schema.dailyCheckins.goalId, activeGoal.id));
+      }
       checkins = await db
         .select()
         .from(schema.dailyCheckins)
-        .where(eq(schema.dailyCheckins.userId, userId));
+        .where(and(...conditions));
+
+      const weeklyConditions = [
+        eq(schema.weeklyProgress.userId, userId),
+        eq(schema.weeklyProgress.weekCompleted, true),
+      ];
+      if (activeGoal) {
+        weeklyConditions.push(eq(schema.weeklyProgress.goalId, activeGoal.id));
+      }
 
       const weeks = await db
         .select({ count: count() })
         .from(schema.weeklyProgress)
-        .where(
-          and(
-            eq(schema.weeklyProgress.userId, userId),
-            eq(schema.weeklyProgress.weekCompleted, true)
-          )
-        );
+        .where(and(...weeklyConditions));
       completedWeeksCount = Number(weeks[0]?.count || 0);
     } else {
       const data = readLocalData();
-      checkins = data.dailyCheckins.filter((c) => c.userId === userId);
-      completedWeeksCount = data.weeklyProgress.filter(
-        (w) => w.userId === userId && w.weekCompleted
+      checkins = (data.dailyCheckins || []).filter(
+        (c) => c.userId === userId && (!activeGoal || c.goalId === activeGoal.id)
+      );
+      completedWeeksCount = (data.weeklyProgress || []).filter(
+        (w) => w.userId === userId && w.weekCompleted && (!activeGoal || w.goalId === activeGoal.id)
       ).length;
     }
 
@@ -779,15 +1093,17 @@ export const dataService = {
     });
 
     return {
-      currentStreak: user.currentStreak,
-      longestStreak: user.longestStreak,
-      totalSuccessfulDays: user.totalSuccessfulDays,
+      currentStreak: activeGoal ? activeGoal.currentStreak : user.currentStreak,
+      longestStreak: activeGoal ? activeGoal.longestStreak : user.longestStreak,
+      totalSuccessfulDays: activeGoal ? activeGoal.totalSuccessfulDays : user.totalSuccessfulDays,
       totalWeeksCompleted: completedWeeksCount,
       currentXp: user.currentXp,
       currentRank: rankInfo.currentRank.name,
       rankInfo,
       totalCheckinsRecorded: totalCheckins,
       moodCounts,
+      goals: userGoals,
+      activeGoal: activeGoal || userGoals[0] || null,
     };
   },
 
@@ -1468,5 +1784,233 @@ export const dataService = {
       const data = readLocalData();
       return (data.adminAuditLogs || []).slice(-limit).reverse();
     }
+  },
+
+  // ----------------------------------------------------
+  // BULK & RAW JSON CMS OPERATIONS
+  // ----------------------------------------------------
+  async saveBulkRanks(newRanks: RankDefinition[]): Promise<{ success: boolean; error?: string }> {
+    if (!Array.isArray(newRanks) || newRanks.length === 0) {
+      return { success: false, error: 'Ranks JSON must be a non-empty array.' };
+    }
+
+    const validation = validateRankHierarchy(newRanks);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const now = new Date();
+    if (isPostgresConfigured() && db) {
+      for (const r of newRanks) {
+        if (!r.name || r.minXp === undefined) {
+          return { success: false, error: `Invalid rank definition: missing name or minXp for rank "${r.id || 'unknown'}"` };
+        }
+        const rankId = r.id || r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        await db
+          .insert(schema.rankDefinitions)
+          .values({
+            id: rankId,
+            name: r.name,
+            description: r.description || '',
+            icon: r.icon || '⚔️',
+            logoUrl: r.logoUrl || null,
+            minXp: r.minXp,
+            displayOrder: r.displayOrder ?? 1,
+            enabled: r.enabled ?? true,
+            badgeColor: r.badgeColor || 'text-amber-400 bg-amber-950/80 border-amber-700',
+            glowColor: r.glowColor || 'shadow-amber-500/20',
+            rankUpMessage: r.rankUpMessage || `Rank ${r.name} Unlocked!`,
+            celebrationVideoUrl: r.celebrationVideoUrl || null,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: schema.rankDefinitions.id,
+            set: {
+              name: r.name,
+              description: r.description || '',
+              icon: r.icon || '⚔️',
+              logoUrl: r.logoUrl || null,
+              minXp: r.minXp,
+              displayOrder: r.displayOrder ?? 1,
+              enabled: r.enabled ?? true,
+              badgeColor: r.badgeColor || 'text-amber-400 bg-amber-950/80 border-amber-700',
+              glowColor: r.glowColor || 'shadow-amber-500/20',
+              rankUpMessage: r.rankUpMessage || `Rank ${r.name} Unlocked!`,
+              celebrationVideoUrl: r.celebrationVideoUrl || null,
+              updatedAt: now,
+            },
+          });
+      }
+      await this.logAdminAction('BULK_RANKS_UPDATED_JSON', { count: newRanks.length });
+      return { success: true };
+    } else {
+      const data = readLocalData();
+      data.rankDefinitions = newRanks.map((r, idx) => ({
+        ...r,
+        id: r.id || r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        displayOrder: r.displayOrder ?? idx + 1,
+        enabled: r.enabled ?? true,
+        rankUpMessage: r.rankUpMessage || `Rank ${r.name} Unlocked!`,
+        badgeColor: r.badgeColor || 'text-amber-400 bg-amber-950/80 border-amber-700',
+        glowColor: r.glowColor || 'shadow-amber-500/20',
+        createdAt: data.rankDefinitions?.find((x) => x.id === r.id)?.createdAt || now.toISOString(),
+        updatedAt: now.toISOString(),
+      }));
+      writeLocalData(data);
+      await this.logAdminAction('BULK_RANKS_UPDATED_JSON', { count: newRanks.length });
+      return { success: true };
+    }
+  },
+
+  async saveBulkAchievements(newAchievements: AchievementDefinition[]): Promise<{ success: boolean; error?: string }> {
+    if (!Array.isArray(newAchievements) || newAchievements.length === 0) {
+      return { success: false, error: 'Achievements JSON must be a non-empty array.' };
+    }
+
+    const now = new Date();
+    if (isPostgresConfigured() && db) {
+      for (const a of newAchievements) {
+        if (!a.id || !a.name || !a.requirementType) {
+          return { success: false, error: `Invalid achievement definition: missing id, name, or requirementType.` };
+        }
+        await db
+          .insert(schema.achievements)
+          .values({
+            id: a.id,
+            name: a.name,
+            description: a.description || '',
+            icon: a.icon || '🏆',
+            requirementType: a.requirementType,
+            requirementValue: String(a.requirementValue),
+            xpReward: a.xpReward ?? 50,
+            displayOrder: a.displayOrder ?? 1,
+            enabled: a.enabled ?? true,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: schema.achievements.id,
+            set: {
+              name: a.name,
+              description: a.description || '',
+              icon: a.icon || '🏆',
+              requirementType: a.requirementType,
+              requirementValue: String(a.requirementValue),
+              xpReward: a.xpReward ?? 50,
+              displayOrder: a.displayOrder ?? 1,
+              enabled: a.enabled ?? true,
+              updatedAt: now,
+            },
+          });
+      }
+      await this.logAdminAction('BULK_ACHIEVEMENTS_UPDATED_JSON', { count: newAchievements.length });
+      return { success: true };
+    } else {
+      const data = readLocalData();
+      data.achievements = newAchievements.map((a, idx) => ({
+        ...a,
+        displayOrder: a.displayOrder ?? idx + 1,
+        enabled: a.enabled ?? true,
+        requirementValue: String(a.requirementValue),
+        createdAt: data.achievements?.find((x) => x.id === a.id)?.createdAt || now.toISOString(),
+        updatedAt: now.toISOString(),
+      }));
+      writeLocalData(data);
+      await this.logAdminAction('BULK_ACHIEVEMENTS_UPDATED_JSON', { count: newAchievements.length });
+      return { success: true };
+    }
+  },
+
+  async saveBulkSettings(settingsList: Array<{ key: string; value: string; category?: string; description?: string }>): Promise<{ success: boolean; error?: string }> {
+    if (!Array.isArray(settingsList)) {
+      return { success: false, error: 'Settings JSON must be an array of key-value objects.' };
+    }
+
+    const now = new Date();
+    if (isPostgresConfigured() && db) {
+      for (const s of settingsList) {
+        if (!s.key) continue;
+        await db
+          .insert(schema.appSettings)
+          .values({
+            id: s.key,
+            key: s.key,
+            value: String(s.value),
+            valueType: 'string',
+            category: s.category || 'general',
+            description: s.description || null,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: schema.appSettings.key,
+            set: {
+              value: String(s.value),
+              category: s.category || 'general',
+              description: s.description || null,
+              updatedAt: now,
+            },
+          });
+      }
+      await this.logAdminAction('BULK_SETTINGS_UPDATED_JSON', { count: settingsList.length });
+      return { success: true };
+    } else {
+      const data = readLocalData();
+      for (const s of settingsList) {
+        if (!s.key) continue;
+        const idx = data.appSettings.findIndex((item) => item.key === s.key);
+        if (idx >= 0) {
+          data.appSettings[idx].value = String(s.value);
+          if (s.category) data.appSettings[idx].category = s.category;
+          if (s.description) data.appSettings[idx].description = s.description;
+          data.appSettings[idx].updatedAt = now.toISOString();
+        } else {
+          data.appSettings.push({
+            id: s.key,
+            key: s.key,
+            value: String(s.value),
+            valueType: 'string',
+            category: s.category || 'general',
+            description: s.description || null,
+            updatedAt: now.toISOString(),
+          });
+        }
+      }
+      writeLocalData(data);
+      await this.logAdminAction('BULK_SETTINGS_UPDATED_JSON', { count: settingsList.length });
+      return { success: true };
+    }
+  },
+
+  async getAllAchievements() {
+    return this.getAchievementDefinitions();
+  },
+
+  async getFullSystemConfig() {
+    const [ranks, achievements, settingsList] = await Promise.all([
+      this.getAllRankDefinitions(),
+      this.getAchievementDefinitions(),
+      this.getAppSettings(),
+    ]);
+    return { ranks, achievements, settings: settingsList };
+  },
+
+  async saveFullSystemConfig(config: {
+    ranks?: RankDefinition[];
+    achievements?: AchievementDefinition[];
+    settings?: Array<{ key: string; value: string; category?: string; description?: string }>;
+  }): Promise<{ success: boolean; error?: string }> {
+    if (config.ranks && Array.isArray(config.ranks)) {
+      const rRes = await this.saveBulkRanks(config.ranks);
+      if (!rRes.success) return rRes;
+    }
+    if (config.achievements && Array.isArray(config.achievements)) {
+      const aRes = await this.saveBulkAchievements(config.achievements);
+      if (!aRes.success) return aRes;
+    }
+    if (config.settings && Array.isArray(config.settings)) {
+      const sRes = await this.saveBulkSettings(config.settings);
+      if (!sRes.success) return sRes;
+    }
+    await this.logAdminAction('FULL_SYSTEM_CONFIG_UPDATED_JSON');
+    return { success: true };
   },
 };

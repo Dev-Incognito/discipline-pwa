@@ -11,6 +11,7 @@ import {
   Trophy,
   Sliders,
   ShieldCheck,
+  Code2,
   LogOut,
   ExternalLink,
   Menu,
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { label: 'Weekly Goals', href: '/admin/goals', icon: Target },
   { label: 'Achievements', href: '/admin/achievements', icon: Trophy },
   { label: 'App Settings', href: '/admin/settings', icon: Sliders },
+  { label: 'Raw JSON', href: '/admin/json', icon: Code2 },
   { label: 'Security & Audit', href: '/admin/security', icon: ShieldCheck },
 ];
 

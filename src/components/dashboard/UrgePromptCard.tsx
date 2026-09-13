@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ShieldAlert, ArrowRight } from 'lucide-react';
 
-export function UrgePromptCard() {
+export function UrgePromptCard({ goalTitle }: { goalTitle?: string }) {
   return (
     <Link
       href="/urge"
@@ -15,10 +15,10 @@ export function UrgePromptCard() {
         </div>
         <div>
           <span className="text-xs font-black uppercase tracking-wider text-red-300">
-            I&apos;M HAVING AN URGE
+            {goalTitle ? `URGE FOR ${goalTitle.toUpperCase()}` : "I'M HAVING AN URGE"}
           </span>
           <p className="text-[11px] text-gray-400">
-            Take 5 minutes before making a decision.
+            {goalTitle ? `Take 5 minutes before breaking your ${goalTitle} streak.` : 'Take 5 minutes before making a decision.'}
           </p>
         </div>
       </div>

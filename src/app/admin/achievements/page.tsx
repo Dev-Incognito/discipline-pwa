@@ -6,8 +6,10 @@ import {
   saveAchievementAction,
   deleteAchievementAction,
   reorderAchievementsAction,
+  saveRawAchievementsJsonAction,
 } from '@/actions/adminActions';
 import { AchievementDefinition } from '@/lib/gamification/achievements';
+import { RawJsonEditorModal } from '@/components/admin/RawJsonEditorModal';
 import {
   Plus,
   Edit2,
@@ -17,6 +19,7 @@ import {
   AlertCircle,
   CheckCircle2,
   X,
+  Code2,
 } from 'lucide-react';
 import { sound } from '@/lib/sound/sound';
 
@@ -33,6 +36,7 @@ export default function AdminAchievementsPage() {
   const [achievements, setAchievements] = useState<AchievementDefinition[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showJsonModal, setShowJsonModal] = useState(false);
 
   // Modal
   const [showModal, setShowModal] = useState(false);
@@ -197,14 +201,27 @@ export default function AdminAchievementsPage() {
             Create trophies, configure requirements (streak, days, weeks, XP, rank) and rewards
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenCreate}
-          className="inline-flex items-center space-x-2 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-black shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:bg-amber-400 transition-all uppercase tracking-wider active:scale-95"
-        >
-          <Plus className="h-4 w-4" />
-          <span>New Achievement</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => {
+              sound.playClick();
+              setShowJsonModal(true);
+            }}
+            className="inline-flex items-center space-x-2 rounded-xl border border-gray-700 bg-gray-800/80 px-4 py-2.5 text-xs font-bold text-gray-200 hover:bg-gray-700 hover:text-white transition-all uppercase tracking-wider active:scale-95"
+          >
+            <Code2 className="h-4 w-4 text-amber-400" />
+            <span>Raw JSON</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="inline-flex items-center space-x-2 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-black shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:bg-amber-400 transition-all uppercase tracking-wider active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Achievement</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -470,6 +487,23 @@ export default function AdminAchievementsPage() {
           </div>
         </div>
       )}
+
+      {/* Raw JSON Editor Modal */}
+      <RawJsonEditorModal
+        isOpen={showJsonModal}
+        onClose={() => setShowJsonModal(false)}
+        title="Raw JSON Editor — Achievements & Trophies"
+        initialJson={JSON.stringify(achievements, null, 2)}
+        onSave={async (json) => {
+          const res = await saveRawAchievementsJsonAction(json);
+          if (res.success) {
+            setToast('Achievements JSON successfully applied to database!');
+            setTimeout(() => setToast(null), 3000);
+            await loadData();
+          }
+          return res;
+        }}
+      />
     </div>
   );
 }

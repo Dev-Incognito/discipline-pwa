@@ -8,6 +8,7 @@ export async function submitCheckinAction(payload: {
   date: string;
   mood?: 'difficult' | 'normal' | 'easy' | null;
   journalNote?: string | null;
+  goalId?: string | null;
 }): Promise<{ success: boolean; data?: CheckinResult; error?: string }> {
   const session = await getUserSession();
   if (!session) {
@@ -24,7 +25,8 @@ export async function submitCheckinAction(payload: {
       session.userId,
       parse.data.date,
       parse.data.mood,
-      parse.data.journalNote
+      parse.data.journalNote,
+      payload.goalId
     );
     return { success: true, data: result };
   } catch (err) {
@@ -37,6 +39,7 @@ export async function saveReflectionAction(payload: {
   date: string;
   mood?: 'difficult' | 'normal' | 'easy' | null;
   journalNote?: string | null;
+  goalId?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   const session = await getUserSession();
   if (!session) {
@@ -48,7 +51,8 @@ export async function saveReflectionAction(payload: {
       session.userId,
       payload.date,
       payload.mood,
-      payload.journalNote
+      payload.journalNote,
+      payload.goalId
     );
     return res;
   } catch (err) {
@@ -57,14 +61,14 @@ export async function saveReflectionAction(payload: {
   }
 }
 
-export async function getDashboardAction(todayDate: string) {
+export async function getDashboardAction(todayDate: string, goalId?: string | null) {
   const session = await getUserSession();
   if (!session) {
     return { success: false, error: 'Unauthorized' };
   }
 
   try {
-    const data = await dataService.getDashboardData(session.userId, todayDate);
+    const data = await dataService.getDashboardData(session.userId, todayDate, goalId);
     if (!data) return { success: false, error: 'User not found' };
     return { success: true, data };
   } catch (err) {
@@ -73,14 +77,14 @@ export async function getDashboardAction(todayDate: string) {
   }
 }
 
-export async function getHistoryAction() {
+export async function getHistoryAction(goalId?: string | null) {
   const session = await getUserSession();
   if (!session) {
     return { success: false, error: 'Unauthorized' };
   }
 
   try {
-    const checkins = await dataService.getHistoryData(session.userId);
+    const checkins = await dataService.getHistoryData(session.userId, goalId);
     return { success: true, data: checkins };
   } catch (err) {
     console.error('Error fetching history:', err);
@@ -88,14 +92,14 @@ export async function getHistoryAction() {
   }
 }
 
-export async function getStatsAction() {
+export async function getStatsAction(goalId?: string | null) {
   const session = await getUserSession();
   if (!session) {
     return { success: false, error: 'Unauthorized' };
   }
 
   try {
-    const stats = await dataService.getStatsData(session.userId);
+    const stats = await dataService.getStatsData(session.userId, goalId);
     if (!stats) return { success: false, error: 'User not found' };
     return { success: true, data: stats };
   } catch (err) {

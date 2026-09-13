@@ -34,6 +34,32 @@ export const users = pgTable(
   ]
 );
 
+export const goals = pgTable(
+  'goals',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    icon: text('icon').default('⚔️').notNull(),
+    color: text('color').default('amber').notNull(),
+    targetDaysPerWeek: integer('target_days_per_week').default(6).notNull(),
+    currentStreak: integer('current_streak').default(0).notNull(),
+    longestStreak: integer('longest_streak').default(0).notNull(),
+    totalSuccessfulDays: integer('total_successful_days').default(0).notNull(),
+    lastCheckinDate: text('last_checkin_date'),
+    archived: boolean('archived').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_goals_user_id').on(table.userId),
+    index('idx_goals_archived').on(table.archived),
+  ]
+);
+
 export const dailyCheckins = pgTable(
   'daily_checkins',
   {
@@ -41,6 +67,8 @@ export const dailyCheckins = pgTable(
     userId: uuid('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    goalId: uuid('goal_id')
+      .references(() => goals.id, { onDelete: 'cascade' }),
     date: text('date').notNull(), // Format: 'YYYY-MM-DD'
     completed: boolean('completed').default(true).notNull(),
     mood: text('mood'), // 'difficult' | 'normal' | 'easy'
@@ -49,8 +77,9 @@ export const dailyCheckins = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('idx_user_date_unique').on(table.userId, table.date),
+    uniqueIndex('idx_user_goal_date_unique').on(table.userId, table.goalId, table.date),
     index('idx_checkins_user').on(table.userId),
+    index('idx_checkins_goal').on(table.goalId),
     index('idx_checkins_date').on(table.date),
   ]
 );
@@ -62,6 +91,8 @@ export const weeklyProgress = pgTable(
     userId: uuid('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    goalId: uuid('goal_id')
+      .references(() => goals.id, { onDelete: 'cascade' }),
     weekStart: text('week_start').notNull(), // YYYY-MM-DD (Monday)
     completedDays: integer('completed_days').default(0).notNull(),
     weeklyGoal: integer('weekly_goal').default(6).notNull(),
@@ -71,8 +102,9 @@ export const weeklyProgress = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('idx_user_week_unique').on(table.userId, table.weekStart),
+    uniqueIndex('idx_user_goal_week_unique').on(table.userId, table.goalId, table.weekStart),
     index('idx_weekly_user').on(table.userId),
+    index('idx_weekly_goal').on(table.goalId),
   ]
 );
 
@@ -171,6 +203,8 @@ export const adminAuditLogs = pgTable('admin_audit_logs', {
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Goal = typeof goals.$inferSelect;
+export type NewGoal = typeof goals.$inferInsert;
 export type DailyCheckin = typeof dailyCheckins.$inferSelect;
 export type WeeklyProgress = typeof weeklyProgress.$inferSelect;
 export type RankDefinitionRecord = typeof rankDefinitions.$inferSelect;

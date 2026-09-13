@@ -183,6 +183,20 @@ class SoundEngine {
       // Context error
     }
   }
+
+  /**
+   * Fanfare sound for celebrations
+   */
+  public playFanfare() {
+    this.playRankUp();
+  }
+
+  /**
+   * Level up sound alias
+   */
+  public playLevelUp() {
+    this.playRankUp();
+  }
 }
 
 export const sound = new SoundEngine();

@@ -399,3 +399,153 @@ export async function getAvailableRankLogosAction(): Promise<{ success: boolean;
   }
   return { success: true, logos };
 }
+
+// ----------------------------------------------------------------------
+// RAW JSON CONFIGURATION ACTIONS (RANKS, ACHIEVEMENTS, SETTINGS, FULL)
+// ----------------------------------------------------------------------
+
+export async function getRawRanksJsonAction(): Promise<{ success: boolean; json?: string; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const ranks = await dataService.getAllRankDefinitions();
+    return { success: true, json: JSON.stringify(ranks, null, 2) };
+  } catch (err) {
+    console.error('Error fetching ranks JSON:', err);
+    return { success: false, error: 'Failed to export ranks JSON' };
+  }
+}
+
+export async function saveRawRanksJsonAction(jsonStr: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) {
+      return { success: false, error: 'JSON root must be an array of rank objects.' };
+    }
+    const res = await dataService.saveBulkRanks(parsed as RankDefinition[]);
+    if (res.success) {
+      revalidatePath('/', 'layout');
+      revalidatePath('/admin/ranks');
+      revalidatePath('/admin/json');
+      revalidatePath('/stats');
+    }
+    return res;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Invalid JSON syntax';
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function getRawAchievementsJsonAction(): Promise<{ success: boolean; json?: string; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const achievements = await dataService.getAllAchievements();
+    return { success: true, json: JSON.stringify(achievements, null, 2) };
+  } catch (err) {
+    console.error('Error fetching achievements JSON:', err);
+    return { success: false, error: 'Failed to export achievements JSON' };
+  }
+}
+
+export async function saveRawAchievementsJsonAction(jsonStr: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) {
+      return { success: false, error: 'JSON root must be an array of achievement objects.' };
+    }
+    const res = await dataService.saveBulkAchievements(parsed as AchievementDefinition[]);
+    if (res.success) {
+      revalidatePath('/', 'layout');
+      revalidatePath('/admin/achievements');
+      revalidatePath('/admin/json');
+      revalidatePath('/achievements');
+    }
+    return res;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Invalid JSON syntax';
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function getRawSettingsJsonAction(): Promise<{ success: boolean; json?: string; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const settingsList = await dataService.getAppSettings();
+    return { success: true, json: JSON.stringify(settingsList, null, 2) };
+  } catch (err) {
+    console.error('Error fetching settings JSON:', err);
+    return { success: false, error: 'Failed to export settings JSON' };
+  }
+}
+
+export async function saveRawSettingsJsonAction(jsonStr: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) {
+      return { success: false, error: 'JSON root must be an array of setting objects (e.g. [{ key, value }]).' };
+    }
+    const res = await dataService.saveBulkSettings(parsed);
+    if (res.success) {
+      revalidatePath('/', 'layout');
+      revalidatePath('/admin/settings');
+      revalidatePath('/admin/json');
+      revalidatePath('/admin/xp');
+    }
+    return res;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Invalid JSON syntax';
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function getFullConfigJsonAction(): Promise<{ success: boolean; json?: string; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const fullConfig = await dataService.getFullSystemConfig();
+    return { success: true, json: JSON.stringify(fullConfig, null, 2) };
+  } catch (err) {
+    console.error('Error fetching full config JSON:', err);
+    return { success: false, error: 'Failed to export system config JSON' };
+  }
+}
+
+export async function saveFullConfigJsonAction(jsonStr: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getAdminSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { success: false, error: 'JSON root must be an object with { ranks, achievements, settings }.' };
+    }
+    const res = await dataService.saveFullSystemConfig(parsed);
+    if (res.success) {
+      revalidatePath('/', 'layout');
+      revalidatePath('/admin');
+      revalidatePath('/admin/ranks');
+      revalidatePath('/admin/achievements');
+      revalidatePath('/admin/settings');
+      revalidatePath('/admin/json');
+    }
+    return res;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Invalid JSON syntax';
+    return { success: false, error: errorMsg };
+  }
+}

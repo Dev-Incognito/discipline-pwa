@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { checkAuthState, AuthStateResponse } from '@/actions/authActions';
-import { getDashboardAction } from '@/actions/checkinActions';
+import { getDashboardAction, saveReflectionAction } from '@/actions/checkinActions';
 import { PinAuthScreen } from '@/components/auth/PinAuthScreen';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -14,6 +14,8 @@ import { CheckinModal } from '@/components/dashboard/CheckinModal';
 import { RankUpModal } from '@/components/celebration/RankUpModal';
 import { CheckinResult } from '@/services/dataService';
 import { RankDefinition } from '@/lib/gamification/ranks';
+import { Goal } from '@/db/schema';
+import { GoalSelector } from '@/components/dashboard/GoalSelector';
 import { Loader2 } from 'lucide-react';
 
 interface DashboardData {
@@ -26,6 +28,8 @@ interface DashboardData {
     currentRank: string;
     weeklyGoal: number;
   };
+  currentGoal?: Goal;
+  goals?: Goal[];
   rankInfo: {
     currentRank: {
       name: string;
@@ -87,6 +91,7 @@ function getTodayString(): string {
 export default function HomePage() {
   const [authState, setAuthState] = useState<AuthStateResponse | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [latestResult, setLatestResult] = useState<CheckinResult | null>(null);
@@ -99,16 +104,29 @@ export default function HomePage() {
 
   const todayDate = getTodayString();
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (goalIdOverride?: string) => {
     try {
-      const res = await getDashboardAction(todayDate);
+      let activeId = goalIdOverride;
+      if (!activeId) {
+        activeId = selectedGoalId || (typeof window !== 'undefined' ? localStorage.getItem('discipline_active_goal_id') || undefined : undefined);
+      }
+      const res = await getDashboardAction(todayDate, activeId);
       if (res.success && res.data) {
-        setDashboardData(res.data as unknown as DashboardData);
+        const data = res.data as unknown as DashboardData;
+        setDashboardData(data);
+        if (data.currentGoal) {
+          setSelectedGoalId(data.currentGoal.id);
+          try {
+            localStorage.setItem('discipline_active_goal_id', data.currentGoal.id);
+          } catch {
+            // ignore
+          }
+        }
       }
     } catch (err) {
       console.error('Error loading dashboard:', err);
     }
-  }, [todayDate]);
+  }, [todayDate, selectedGoalId]);
 
   const loadAuthAndData = useCallback(async () => {
     setIsLoading(true);
@@ -141,7 +159,7 @@ export default function HomePage() {
     } else {
       setIsModalOpen(true);
     }
-    loadDashboard();
+    loadDashboard(selectedGoalId || undefined);
   };
 
   const handleSaveReflection = (mood: 'difficult' | 'normal' | 'easy' | null, note: string) => {
@@ -150,6 +168,12 @@ export default function HomePage() {
         ...dashboardData,
         todayMood: mood,
         todayJournal: note,
+      });
+      saveReflectionAction({
+        date: todayDate,
+        mood,
+        journalNote: note,
+        goalId: selectedGoalId || dashboardData.currentGoal?.id,
       });
     }
   };
@@ -188,6 +212,26 @@ export default function HomePage() {
       <main className="flex-1 space-y-4 px-4 py-4">
         {dashboardData && (
           <>
+            {/* Multi-Goal Habit Switcher */}
+            {dashboardData.goals && dashboardData.goals.length > 0 && (
+              <GoalSelector
+                goals={dashboardData.goals}
+                activeGoalId={dashboardData.currentGoal?.id || dashboardData.goals[0].id}
+                onSelectGoal={(newGoalId) => {
+                  setSelectedGoalId(newGoalId);
+                  try {
+                    localStorage.setItem('discipline_active_goal_id', newGoalId);
+                  } catch {
+                    // ignore
+                  }
+                  loadDashboard(newGoalId);
+                }}
+                onGoalsChanged={() => {
+                  loadDashboard(selectedGoalId || undefined);
+                }}
+              />
+            )}
+
             {/* Streak & Rank Hero Card */}
             <StreakHero
               currentStreak={dashboardData.user.currentStreak}
@@ -202,6 +246,8 @@ export default function HomePage() {
               todayDate={todayDate}
               isCompleted={dashboardData.isTodayCheckedIn}
               todayMood={dashboardData.todayMood}
+              goalId={dashboardData.currentGoal?.id}
+              goalTitle={dashboardData.currentGoal?.title}
               onCheckinSuccess={handleCheckinSuccess}
               onOpenReflectionModal={() => setIsModalOpen(true)}
             />
@@ -210,7 +256,7 @@ export default function HomePage() {
             <WeeklyProgressCard weeklyStatus={dashboardData.weeklyStatus} />
 
             {/* Emergency Urge Tool Access */}
-            <UrgePromptCard />
+            <UrgePromptCard goalTitle={dashboardData.currentGoal?.title} />
           </>
         )}
       </main>

@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getStatsAction } from '@/actions/checkinActions';
+import { getUserGoalsAction } from '@/actions/goalActions';
+import { Goal } from '@/db/schema';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Flame, Trophy, Award, Sparkles, TrendingUp, Smile, Calendar, Loader2 } from 'lucide-react';
+import { sound } from '@/lib/sound/sound';
 
 interface StatsData {
   currentStreak: number;
@@ -26,6 +29,8 @@ interface StatsData {
     normal: number;
     easy: number;
   };
+  goals?: Goal[];
+  activeGoal?: Goal | null;
 }
 
 function StatsProfileCard({ stats }: { stats: StatsData }) {
@@ -59,26 +64,38 @@ function StatsProfileCard({ stats }: { stats: StatsData }) {
 
 export default function StatsPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [selectedGoalId, setSelectedGoalId] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      setIsLoading(true);
-      const res = await getStatsAction();
-      if (res.success && res.data) {
-        setStats(res.data as StatsData);
-      }
-      setIsLoading(false);
+  const loadData = useCallback(async (goalId: string) => {
+    setIsLoading(true);
+    const [statsRes, goalsRes] = await Promise.all([
+      getStatsAction(goalId === 'all' ? undefined : goalId),
+      getUserGoalsAction(),
+    ]);
+
+    if (statsRes.success && statsRes.data) {
+      setStats(statsRes.data as StatsData);
     }
-    load();
+    if (goalsRes.success && goalsRes.data) {
+      setGoals(goalsRes.data as Goal[]);
+    }
+    setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadData(selectedGoalId);
+  }, [selectedGoalId, loadData]);
 
   const totalMoodCount =
     (stats?.moodCounts.difficult || 0) +
     (stats?.moodCounts.normal || 0) +
     (stats?.moodCounts.easy || 0);
 
-  if (isLoading) {
+  const activeGoal = goals.find((g) => g.id === selectedGoalId);
+
+  if (isLoading && !stats) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#080b11] text-amber-500">
         <Loader2 className="h-7 w-7 animate-spin" />
@@ -91,6 +108,63 @@ export default function StatsPage() {
       <Header currentRank={stats?.currentRank || 'Stats'} />
 
       <main className="flex-1 space-y-4 px-4 py-4">
+        {/* Habit Track Filter */}
+        {goals.length > 0 && (
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 no-scrollbar touch-pan-x">
+            <button
+              onClick={() => {
+                sound.playClick();
+                setSelectedGoalId('all');
+              }}
+              className={`flex shrink-0 items-center space-x-1.5 rounded-xl px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all active:scale-95 border ${
+                selectedGoalId === 'all'
+                  ? 'bg-amber-500 text-black border-amber-500 shadow-md shadow-amber-500/20'
+                  : 'bg-gray-900/80 text-gray-400 border-gray-800 hover:border-gray-700 hover:text-gray-200'
+              }`}
+            >
+              <span>⚡ All Habits</span>
+            </button>
+            {goals.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => {
+                  sound.playClick();
+                  setSelectedGoalId(g.id);
+                }}
+                className={`flex shrink-0 items-center space-x-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all active:scale-95 border ${
+                  selectedGoalId === g.id
+                    ? 'bg-amber-500 text-black border-amber-500 shadow-md shadow-amber-500/20'
+                    : 'bg-gray-900/80 text-gray-400 border-gray-800 hover:border-gray-700 hover:text-gray-200'
+                }`}
+              >
+                <span>{g.icon}</span>
+                <span className="truncate max-w-[120px]">{g.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Selected Goal Context Banner */}
+        {activeGoal && (
+          <div className="flex items-center justify-between rounded-2xl bg-gray-900/60 border border-gray-800/80 px-4 py-2.5">
+            <div className="flex items-center space-x-2">
+              <span className="text-lg">{activeGoal.icon}</span>
+              <div>
+                <h2 className="text-xs font-bold text-gray-200">{activeGoal.title}</h2>
+                <p className="text-[10px] text-gray-400">
+                  Target: {activeGoal.targetDaysPerWeek} days / week
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2 py-1">
+              <Flame className="h-3 w-3 text-amber-400" />
+              <span className="text-xs font-mono font-bold text-amber-400">
+                {activeGoal.currentStreak}d Streak
+              </span>
+            </div>
+          </div>
+        )}
+
         {stats && (
           <>
             {/* Player RPG Card */}

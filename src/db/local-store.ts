@@ -19,9 +19,26 @@ export interface LocalDataSchema {
     createdAt: string;
     updatedAt: string;
   }>;
+  goals: Array<{
+    id: string;
+    userId: string;
+    title: string;
+    description?: string | null;
+    icon: string;
+    color: string;
+    targetDaysPerWeek: number;
+    currentStreak: number;
+    longestStreak: number;
+    totalSuccessfulDays: number;
+    lastCheckinDate: string | null;
+    archived: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   dailyCheckins: Array<{
     id: string;
     userId: string;
+    goalId?: string | null;
     date: string;
     completed: boolean;
     mood: string | null;
@@ -32,6 +49,7 @@ export interface LocalDataSchema {
   weeklyProgress: Array<{
     id: string;
     userId: string;
+    goalId?: string | null;
     weekStart: string;
     completedDays: number;
     weeklyGoal: number;
@@ -107,115 +125,227 @@ const DATA_FILE = path.join(DATA_DIR, 'discipline_dev.json');
 
 export const DEFAULT_RANKS = [
   {
-    id: 'beginner',
-    name: 'Beginner',
+    id: 'npc',
+    name: 'NPC',
     minXp: 0,
-    icon: '🥚',
+    icon: '😶',
     logoUrl: null,
     displayOrder: 1,
     enabled: true,
-    description: 'Every journey starts somewhere.',
+    description: 'You are just an extra in someone else\'s story.',
     badgeColor: 'text-zinc-400 bg-zinc-800/80 border-zinc-700',
     glowColor: 'shadow-zinc-500/20',
-    rankUpMessage: 'Welcome to your journey.',
+    rankUpMessage: 'Your journey begins. Stop being an NPC.',
     celebrationVideoUrl: null,
   },
   {
-    id: 'warrior',
-    name: 'Warrior',
+    id: 'alpha',
+    name: 'Alpha',
     minXp: 100,
-    icon: '⚔️',
+    icon: '🐺',
     logoUrl: null,
     displayOrder: 2,
     enabled: true,
-    description: 'Consistency is becoming a habit.',
+    description: 'First steps of real discipline.',
+    badgeColor: 'text-slate-400 bg-slate-800/80 border-slate-600',
+    glowColor: 'shadow-slate-500/20',
+    rankUpMessage: 'Alpha unlocked. You showed up.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'beta',
+    name: 'Beta',
+    minXp: 250,
+    icon: '🔰',
+    logoUrl: null,
+    displayOrder: 3,
+    enabled: true,
+    description: 'Consistency is starting to click.',
+    badgeColor: 'text-sky-400 bg-sky-950/80 border-sky-700',
+    glowColor: 'shadow-sky-500/20',
+    rankUpMessage: 'Beta tier reached. Keep stacking days.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'coping',
+    name: 'Coping',
+    minXp: 500,
+    icon: '😤',
+    logoUrl: null,
+    displayOrder: 4,
+    enabled: true,
+    description: 'You\'re fighting through resistance.',
     badgeColor: 'text-blue-400 bg-blue-950/80 border-blue-700',
     glowColor: 'shadow-blue-500/20',
-    rankUpMessage: 'Consistency is becoming a habit.',
+    rankUpMessage: 'Coping tier — the grind is real.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'locked-in',
+    name: 'Locked-In',
+    minXp: 900,
+    icon: '🔒',
+    logoUrl: null,
+    displayOrder: 5,
+    enabled: true,
+    description: 'Distraction is no longer winning.',
+    badgeColor: 'text-indigo-400 bg-indigo-950/80 border-indigo-700',
+    glowColor: 'shadow-indigo-500/20',
+    rankUpMessage: 'Locked-In. Your focus is sharpening.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'built-different',
+    name: 'Built Different',
+    minXp: 1500,
+    icon: '🏗️',
+    logoUrl: null,
+    displayOrder: 6,
+    enabled: true,
+    description: 'Most people quit here. Not you.',
+    badgeColor: 'text-emerald-400 bg-emerald-950/80 border-emerald-700',
+    glowColor: 'shadow-emerald-500/20',
+    rankUpMessage: 'Built Different. You\'re not like most.',
     celebrationVideoUrl: null,
   },
   {
     id: 'chad',
     name: 'Chad',
-    minXp: 300,
+    minXp: 2500,
     icon: '💪',
     logoUrl: null,
-    displayOrder: 3,
+    displayOrder: 7,
     enabled: true,
-    description: "You're building serious momentum.",
-    badgeColor: 'text-emerald-400 bg-emerald-950/80 border-emerald-700',
-    glowColor: 'shadow-emerald-500/20',
-    rankUpMessage: "You're building serious momentum.",
+    description: 'Serious momentum. The standard is rising.',
+    badgeColor: 'text-green-400 bg-green-950/80 border-green-700',
+    glowColor: 'shadow-green-500/20',
+    rankUpMessage: 'Chad status achieved. Keep the standard high.',
     celebrationVideoUrl: null,
   },
   {
     id: 'giga-chad',
     name: 'Giga Chad',
-    minXp: 750,
+    minXp: 4000,
     icon: '🗿',
-    logoUrl: null,
-    displayOrder: 4,
-    enabled: true,
-    description: 'Elite consistency unlocked.',
-    badgeColor: 'text-amber-400 bg-amber-950/80 border-amber-700',
-    glowColor: 'shadow-amber-500/20',
-    rankUpMessage: 'Elite consistency unlocked.',
-    celebrationVideoUrl: null,
-  },
-  {
-    id: 'hercules',
-    name: 'Hercules',
-    minXp: 1500,
-    icon: '⚡',
-    logoUrl: null,
-    displayOrder: 5,
-    enabled: true,
-    description: "You're entering legendary territory.",
-    badgeColor: 'text-orange-400 bg-orange-950/80 border-orange-700',
-    glowColor: 'shadow-orange-500/20',
-    rankUpMessage: "You're entering legendary territory.",
-    celebrationVideoUrl: null,
-  },
-  {
-    id: 'titan',
-    name: 'Titan',
-    minXp: 3000,
-    icon: '👑',
-    logoUrl: null,
-    displayOrder: 6,
-    enabled: true,
-    description: 'Very few ever reach this level.',
-    badgeColor: 'text-purple-400 bg-purple-950/80 border-purple-700',
-    glowColor: 'shadow-purple-500/20',
-    rankUpMessage: 'Titan power achieved. Exceptional discipline.',
-    celebrationVideoUrl: null,
-  },
-  {
-    id: 'ascended',
-    name: 'Ascended',
-    minXp: 6000,
-    icon: '🌌',
-    logoUrl: null,
-    displayOrder: 7,
-    enabled: true,
-    description: 'Transcendent self-control and focus.',
-    badgeColor: 'text-rose-400 bg-rose-950/80 border-rose-700',
-    glowColor: 'shadow-rose-500/20',
-    rankUpMessage: 'Ascended discipline unlocked. True mastery.',
-    celebrationVideoUrl: null,
-  },
-  {
-    id: 'legend',
-    name: 'Legend',
-    minXp: 10000,
-    icon: '🐐',
     logoUrl: null,
     displayOrder: 8,
     enabled: true,
-    description: 'The pinnacle of greatness. GOAT status.',
-    badgeColor: 'text-yellow-300 bg-yellow-950/80 border-yellow-500',
+    description: 'Elite discipline. The grind is automatic.',
+    badgeColor: 'text-amber-400 bg-amber-950/80 border-amber-700',
+    glowColor: 'shadow-amber-500/20',
+    rankUpMessage: 'Giga Chad. The elite don\'t count days.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'menace',
+    name: 'Menace',
+    minXp: 6000,
+    icon: '😈',
+    logoUrl: null,
+    displayOrder: 9,
+    enabled: true,
+    description: 'Dangerously disciplined. Others watch in awe.',
+    badgeColor: 'text-orange-400 bg-orange-950/80 border-orange-700',
+    glowColor: 'shadow-orange-500/20',
+    rankUpMessage: 'Menace unlocked. You are a threat to mediocrity.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'peak-masculinity',
+    name: 'Peak Masculinity',
+    minXp: 9000,
+    icon: '🦁',
+    logoUrl: null,
+    displayOrder: 10,
+    enabled: true,
+    description: 'The top fraction. You are the reference point.',
+    badgeColor: 'text-yellow-400 bg-yellow-950/80 border-yellow-700',
     glowColor: 'shadow-yellow-500/30',
-    rankUpMessage: 'The final rank. You are a living Legend.',
+    rankUpMessage: 'Peak Masculinity. Few will ever see this.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'final-boss',
+    name: 'Final Boss',
+    minXp: 13000,
+    icon: '👹',
+    logoUrl: null,
+    displayOrder: 11,
+    enabled: true,
+    description: 'You are the obstacle others are afraid to face.',
+    badgeColor: 'text-red-400 bg-red-950/80 border-red-700',
+    glowColor: 'shadow-red-500/30',
+    rankUpMessage: 'Final Boss. Others were never ready for you.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'lore-accurate',
+    name: 'Lore Accurate',
+    minXp: 18000,
+    icon: '📖',
+    logoUrl: null,
+    displayOrder: 12,
+    enabled: true,
+    description: 'Your story is already being told.',
+    badgeColor: 'text-purple-400 bg-purple-950/80 border-purple-700',
+    glowColor: 'shadow-purple-500/30',
+    rankUpMessage: 'Lore Accurate. Your name carries weight now.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'unreasonably-disciplined',
+    name: 'Unreasonably Disciplined',
+    minXp: 25000,
+    icon: '🤖',
+    logoUrl: null,
+    displayOrder: 13,
+    enabled: true,
+    description: 'Discipline at a level that defies logic.',
+    badgeColor: 'text-rose-400 bg-rose-950/80 border-rose-700',
+    glowColor: 'shadow-rose-500/30',
+    rankUpMessage: 'Unreasonably Disciplined. Normal doesn\'t apply to you.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'beyond-human-comprehension',
+    name: 'Beyond Human Comprehension',
+    minXp: 35000,
+    icon: '🌌',
+    logoUrl: null,
+    displayOrder: 14,
+    enabled: true,
+    description: 'Science cannot explain your consistency.',
+    badgeColor: 'text-cyan-300 bg-cyan-950/80 border-cyan-600',
+    glowColor: 'shadow-cyan-400/30',
+    rankUpMessage: 'Beyond Human Comprehension. You broke the simulation.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'main-character',
+    name: 'Main Character',
+    minXp: 50000,
+    icon: '⭐',
+    logoUrl: null,
+    displayOrder: 15,
+    enabled: true,
+    description: 'The universe is built around your arc.',
+    badgeColor: 'text-yellow-200 bg-yellow-950/80 border-yellow-400',
+    glowColor: 'shadow-yellow-300/40',
+    rankUpMessage: 'Main Character. This was always your story.',
+    celebrationVideoUrl: null,
+  },
+  {
+    id: 'unfuckable',
+    name: 'Unfuckable',
+    minXp: 75000,
+    icon: '🔱',
+    logoUrl: null,
+    displayOrder: 16,
+    enabled: true,
+    description: 'Nothing can stop you. Nothing ever could.',
+    badgeColor: 'text-white bg-gradient-to-r from-amber-950/80 to-yellow-900/80 border-yellow-300',
+    glowColor: 'shadow-yellow-200/50',
+    rankUpMessage: 'UNFUCKABLE. The final form. No one is touching you.',
     celebrationVideoUrl: null,
   },
 ];
@@ -277,6 +407,7 @@ function getDefaultData(): LocalDataSchema {
       createdAt: now,
       updatedAt: now,
     })),
+    goals: [],
     userAchievements: [],
     settings: [],
     adminAuditLogs: [],
@@ -298,6 +429,12 @@ export function readLocalData(): LocalDataSchema {
 
     let modified = false;
     const now = new Date().toISOString();
+
+    // Auto-migrate if goals missing
+    if (!parsed.goals) {
+      parsed.goals = [];
+      modified = true;
+    }
 
     // Auto-migrate if rankDefinitions missing
     if (!parsed.rankDefinitions || parsed.rankDefinitions.length === 0) {
@@ -328,8 +465,9 @@ export function readLocalData(): LocalDataSchema {
       }));
     }
 
-    const fullData = {
+    const fullData: LocalDataSchema = {
       users: parsed.users || [],
+      goals: parsed.goals || [],
       dailyCheckins: parsed.dailyCheckins || [],
       weeklyProgress: parsed.weeklyProgress || [],
       rankDefinitions: parsed.rankDefinitions || [],

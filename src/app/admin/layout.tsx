@@ -99,10 +99,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {isLoading ? 'Verifying...' : 'Unlock CMS'}
             </button>
           </form>
-
-          <div className="mt-6 border-t border-gray-800/80 pt-4 text-center">
-            <span className="text-[11px] text-gray-500 font-mono">Default Dev PIN: 9999</span>
-          </div>
         </div>
       </div>
     );
