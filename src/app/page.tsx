@@ -171,7 +171,6 @@ export default function HomePage() {
   if (!authState?.isAuthenticated) {
     return (
       <PinAuthScreen
-        mode={authState?.hasAccount ? 'login' : 'setup'}
         onAuthenticated={loadAuthAndData}
       />
     );
@@ -180,7 +179,10 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-[#080b11] text-gray-100 pb-safe-nav">
       {/* Header */}
-      <Header currentRank={dashboardData?.rankInfo?.currentRank?.name || 'Beginner'} />
+      <Header
+        currentRank={dashboardData?.rankInfo?.currentRank?.name || 'Beginner'}
+        username={authState?.username}
+      />
 
       {/* Main Content Scroll Area */}
       <main className="flex-1 space-y-4 px-4 py-4">

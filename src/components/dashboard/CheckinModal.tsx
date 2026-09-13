@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { X, Flame, Sparkles, Trophy, Check } from 'lucide-react';
-import { submitCheckinAction } from '@/actions/checkinActions';
+import { saveReflectionAction } from '@/actions/checkinActions';
 import { CheckinResult } from '@/services/dataService';
 
 interface CheckinModalProps {
@@ -43,7 +43,7 @@ export function CheckinModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await submitCheckinAction({
+      await saveReflectionAction({
         date: todayDate,
         mood: selectedMood,
         journalNote: journalNote.trim() ? journalNote.trim() : null,

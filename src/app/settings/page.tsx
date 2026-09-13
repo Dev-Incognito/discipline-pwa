@@ -42,6 +42,8 @@ export default function SettingsPage() {
   const router = useRouter();
 
   // Settings State
+  const [username, setUsername] = useState<string>('');
+  const [currentRank, setCurrentRank] = useState<string>('Beginner');
   const [weeklyGoal, setWeeklyGoal] = useState<number>(6);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(true);
@@ -67,6 +69,8 @@ export default function SettingsPage() {
     async function load() {
       const res = await getSettingsAction();
       if (res.success && res.data) {
+        setUsername(res.data.username || 'user');
+        setCurrentRank(res.data.currentRank || 'Beginner');
         setWeeklyGoal(res.data.weeklyGoal);
         setSoundEnabled(res.data.soundEnabled);
         sound.setSoundEnabled(res.data.soundEnabled);
@@ -175,9 +179,35 @@ export default function SettingsPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#080b11] text-gray-100 pb-safe-nav">
-      <Header currentRank="Settings" />
+      <Header currentRank={currentRank} username={username} />
 
       <main className="flex-1 space-y-5 px-4 py-4">
+        {/* Section: Account & Identity */}
+        <section className="space-y-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+            Account & Identity
+          </span>
+          <div className="rounded-2xl bg-[#0f1422] border border-gray-800 p-4 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold font-mono text-base">
+                {username ? username.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div>
+                <span className="text-sm font-bold text-gray-100 font-mono">@{username || 'user'}</span>
+                <p className="text-xs text-amber-400/80 font-medium">Rank: {currentRank}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center space-x-1.5 rounded-xl border border-gray-800 bg-gray-900/80 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:text-rose-400 hover:border-rose-900/60 transition-all active:scale-95"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Log Out</span>
+            </button>
+          </div>
+        </section>
+
         {/* Section: Security */}
         <section className="space-y-2">
           <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -192,7 +222,7 @@ export default function SettingsPage() {
               <div className="flex items-center space-x-3">
                 <Key className="h-5 w-5 text-amber-400" />
                 <div>
-                  <span className="text-sm font-semibold text-gray-200">Change Master PIN</span>
+                  <span className="text-sm font-semibold text-gray-200">Change Private PIN</span>
                   <p className="text-xs text-gray-500">Update your access key</p>
                 </div>
               </div>
@@ -207,8 +237,8 @@ export default function SettingsPage() {
               <div className="flex items-center space-x-3">
                 <LogOut className="h-5 w-5 text-rose-400" />
                 <div>
-                  <span className="text-sm font-semibold text-gray-200">Lock Session</span>
-                  <p className="text-xs text-gray-500">Require PIN to re-enter</p>
+                  <span className="text-sm font-semibold text-gray-200">Switch Account / Lock</span>
+                  <p className="text-xs text-gray-500">Log out to switch user or lock app</p>
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-gray-500" />

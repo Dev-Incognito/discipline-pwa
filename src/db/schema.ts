@@ -14,6 +14,7 @@ export const users = pgTable(
   'users',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    username: text('username').notNull().unique(),
     pinHash: text('pin_hash').notNull(),
     currentXp: integer('current_xp').default(0).notNull(),
     currentStreak: integer('current_streak').default(0).notNull(),
@@ -28,6 +29,7 @@ export const users = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    uniqueIndex('idx_users_username').on(table.username),
     index('idx_users_last_checkin').on(table.lastCheckinDate),
   ]
 );

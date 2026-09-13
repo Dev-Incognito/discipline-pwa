@@ -5,6 +5,7 @@ import { ACHIEVEMENTS } from '@/lib/gamification/achievements';
 export interface LocalDataSchema {
   users: Array<{
     id: string;
+    username: string;
     pinHash: string;
     currentXp: number;
     currentStreak: number;

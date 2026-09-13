@@ -5,10 +5,11 @@ import { useEffect, useState } from 'react';
 
 interface HeaderProps {
   currentRank?: string;
+  username?: string;
   onUrgeClick?: () => void;
 }
 
-export function Header({ currentRank = 'Beginner' }: HeaderProps) {
+export function Header({ currentRank = 'Beginner', username }: HeaderProps) {
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,11 @@ export function Header({ currentRank = 'Beginner' }: HeaderProps) {
             <WifiOff className="h-3 w-3" />
             <span>Offline</span>
           </div>
+        )}
+        {username && (
+          <span className="hidden xs:inline-block font-mono text-[11px] text-gray-400 bg-gray-950/80 border border-gray-800 rounded-full px-2.5 py-0.5">
+            @{username}
+          </span>
         )}
         <div className="flex items-center rounded-full bg-gray-900 border border-amber-500/40 px-3 py-1 text-xs font-semibold text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.15)]">
           <span>{currentRank}</span>

@@ -14,11 +14,12 @@ export interface AuthStateResponse {
   hasAccount: boolean;
   isAuthenticated: boolean;
   userId?: string;
+  username?: string;
   currentRank?: string;
 }
 
 /**
- * Checks current auth status: whether an account exists and whether user is authenticated
+ * Checks current auth status: whether user has an active session
  */
 export async function checkAuthState(): Promise<AuthStateResponse> {
   const session = await getUserSession();
@@ -29,58 +30,74 @@ export async function checkAuthState(): Promise<AuthStateResponse> {
         hasAccount: true,
         isAuthenticated: true,
         userId: user.id,
+        username: user.username,
         currentRank: user.currentRank,
       };
     }
   }
 
-  // Check if any user exists in database
-  const firstUser = await dataService.getFirstUser();
   return {
-    hasAccount: Boolean(firstUser),
+    hasAccount: true,
     isAuthenticated: false,
   };
 }
 
 /**
- * Creates initial user account with PIN
+ * Registers a new user account with unique username and PIN
  */
-export async function setupPinAction(pin: string): Promise<{ success: boolean; error?: string }> {
+export async function registerUserAction(
+  username: string,
+  pin: string
+): Promise<{ success: boolean; error?: string }> {
+  const cleanUsername = (username || '').trim();
+  if (!cleanUsername || cleanUsername.length < 3 || cleanUsername.length > 20) {
+    return { success: false, error: 'Username must be between 3 and 20 characters.' };
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
+    return { success: false, error: 'Username can only contain letters, numbers, and underscores.' };
+  }
+
   const parseResult = pinSchema.safeParse(pin);
   if (!parseResult.success) {
     return { success: false, error: parseResult.error.errors[0]?.message || 'Invalid PIN' };
   }
 
   try {
-    const existingUser = await dataService.getFirstUser();
+    const existingUser = await dataService.getUserByUsername(cleanUsername);
     if (existingUser) {
-      return { success: false, error: 'An account already exists. Please log in.' };
+      return { success: false, error: 'Username is already taken. Please choose another.' };
     }
 
     const pinHash = await hashPin(pin);
-    const newUser = await dataService.createUserWithPin(pinHash);
+    const newUser = await dataService.createUserWithPin(cleanUsername, pinHash);
     await createUserSession(newUser.id);
     return { success: true };
   } catch (error) {
-    console.error('Setup PIN error:', error);
-    return { success: false, error: 'Failed to create PIN. Please try again.' };
+    console.error('Registration error:', error);
+    return { success: false, error: 'Failed to create account. Please try again.' };
   }
 }
 
 /**
- * Logs in with user PIN with brute-force lockout protection
+ * Logs in with username and PIN with brute-force lockout protection
  */
-export async function loginWithPinAction(
+export async function loginUserAction(
+  username: string,
   pin: string
 ): Promise<{ success: boolean; error?: string; remainingAttempts?: number }> {
-  const parseResult = pinSchema.safeParse(pin);
-  if (!parseResult.success) {
-    return { success: false, error: 'Invalid PIN' };
+  const cleanUsername = (username || '').trim();
+  if (!cleanUsername) {
+    return { success: false, error: 'Please enter your username.' };
   }
 
-  const user = await dataService.getFirstUser();
+  const parseResult = pinSchema.safeParse(pin);
+  if (!parseResult.success) {
+    return { success: false, error: 'PIN must be 4 to 8 digits.' };
+  }
+
+  const user = await dataService.getUserByUsername(cleanUsername);
   if (!user) {
-    return { success: false, error: 'No account found. Please create one.' };
+    return { success: false, error: 'No account found with that username.' };
   }
 
   // Rate limiter check by user id
@@ -103,7 +120,7 @@ export async function loginWithPinAction(
     }
     return {
       success: false,
-      error: 'Invalid PIN',
+      error: 'Invalid PIN for this user.',
       remainingAttempts: failedStatus.remainingAttempts,
     };
   }
@@ -112,6 +129,23 @@ export async function loginWithPinAction(
   resetAttempts(user.id);
   await createUserSession(user.id);
   return { success: true };
+}
+
+/**
+ * Legacy aliases for backwards compatibility
+ */
+export async function setupPinAction(pin: string): Promise<{ success: boolean; error?: string }> {
+  return registerUserAction('user_' + Math.floor(Math.random() * 100000), pin);
+}
+
+export async function loginWithPinAction(
+  pin: string
+): Promise<{ success: boolean; error?: string; remainingAttempts?: number }> {
+  const firstUser = await dataService.getFirstUser();
+  if (!firstUser) {
+    return { success: false, error: 'No account found. Please register.' };
+  }
+  return loginUserAction(firstUser.username, pin);
 }
 
 /**

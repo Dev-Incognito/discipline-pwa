@@ -16,6 +16,8 @@ export async function getSettingsAction() {
   return {
     success: true,
     data: {
+      username: user?.username ?? 'user',
+      currentRank: user?.currentRank ?? 'Beginner',
       weeklyGoal: user?.weeklyGoal ?? 6,
       soundEnabled: settings?.soundEnabled ?? true,
       hapticsEnabled: settings?.hapticsEnabled ?? true,

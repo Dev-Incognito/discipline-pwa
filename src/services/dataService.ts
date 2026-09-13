@@ -1,9 +1,9 @@
 import { db, isPostgresConfigured, schema } from '@/db';
 import { readLocalData, writeLocalData, DEFAULT_RANKS, DEFAULT_APP_SETTINGS } from '@/db/local-store';
-import { eq, and, desc, asc, count } from 'drizzle-orm';
+import { eq, and, desc, asc, count, sql } from 'drizzle-orm';
 import { evaluateStreak } from '@/lib/gamification/streaks';
 import { calculateDailyCheckinXp, XpConfig } from '@/lib/gamification/xp';
-import { getMondayOfWeek, computeWeeklyStatus } from '@/lib/gamification/weekly';
+import { getMondayOfWeek, getWeekDates, computeWeeklyStatus } from '@/lib/gamification/weekly';
 import { getRankFromXp, validateRankHierarchy, RankDefinition } from '@/lib/gamification/ranks';
 import { checkNewAchievements, AchievementDefinition } from '@/lib/gamification/achievements';
 import crypto from 'crypto';
@@ -57,7 +57,27 @@ export const dataService = {
     }
   },
 
-  async createUserWithPin(pinHash: string) {
+  async getUserByUsername(username: string) {
+    const cleanUsername = username.trim().toLowerCase();
+    if (isPostgresConfigured() && db) {
+      const result = await db
+        .select()
+        .from(schema.users)
+        .where(sql`lower(${schema.users.username}) = ${cleanUsername}`)
+        .limit(1);
+      return result[0] || null;
+    } else {
+      const data = readLocalData();
+      return (
+        data.users.find(
+          (u) => (u.username || '').toLowerCase() === cleanUsername
+        ) || null
+      );
+    }
+  },
+
+  async createUserWithPin(username: string, pinHash: string) {
+    const cleanUsername = username.trim().toLowerCase();
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
@@ -66,6 +86,7 @@ export const dataService = {
         .insert(schema.users)
         .values({
           id,
+          username: cleanUsername,
           pinHash,
           currentXp: 0,
           currentStreak: 0,
@@ -89,6 +110,7 @@ export const dataService = {
       const data = readLocalData();
       const newUser = {
         id,
+        username: cleanUsername,
         pinHash,
         currentXp: 0,
         currentStreak: 0,
@@ -233,7 +255,24 @@ export const dataService = {
           },
         });
 
-      // 2. Fetch existing weekly progress
+      // 2. Fetch existing weekly progress and count distinct completed days in this week
+      const weekDates = getWeekDates(weekStart);
+      const weekCheckins = await db
+        .select({ date: schema.dailyCheckins.date })
+        .from(schema.dailyCheckins)
+        .where(
+          and(
+            eq(schema.dailyCheckins.userId, userId),
+            eq(schema.dailyCheckins.completed, true)
+          )
+        );
+
+      const checkinDatesThisWeek = new Set(
+        weekCheckins.map((c) => c.date).filter((d) => weekDates.includes(d))
+      );
+      checkinDatesThisWeek.add(todayDate);
+      completedDaysInWeek = checkinDatesThisWeek.size;
+
       const existingWeekly = await db
         .select()
         .from(schema.weeklyProgress)
@@ -246,7 +285,6 @@ export const dataService = {
         .limit(1);
 
       if (existingWeekly[0]) {
-        completedDaysInWeek = existingWeekly[0].completedDays + 1;
         bonusAlreadyAwarded = existingWeekly[0].bonusAwarded;
       }
 
@@ -417,10 +455,17 @@ export const dataService = {
 
       // Save unlock
       if (isPostgresConfigured() && db) {
-        await db.insert(schema.userAchievements).values({
-          userId,
-          achievementId: ach.id,
-        });
+        try {
+          await db
+            .insert(schema.userAchievements)
+            .values({
+              userId,
+              achievementId: ach.id,
+            })
+            .onConflictDoNothing();
+        } catch (achErr) {
+          console.error('Achievement unlock recording error:', achErr);
+        }
       } else {
         const data = readLocalData();
         data.userAchievements.push({
@@ -492,6 +537,58 @@ export const dataService = {
       celebrationVideoUrl: finalRankInfo.currentRank.celebrationVideoUrl || settingsMap.celebration_video_url || '/videos/celebration.mp4',
       unlockedAchievements: unlockedAchievementsList,
     };
+  },
+
+  async saveDailyReflection(
+    userId: string,
+    todayDate: string,
+    mood?: string | null,
+    journalNote?: string | null
+  ): Promise<{ success: boolean; error?: string }> {
+    if (isPostgresConfigured() && db) {
+      await db
+        .insert(schema.dailyCheckins)
+        .values({
+          userId,
+          date: todayDate,
+          completed: true,
+          mood: mood || null,
+          journalNote: journalNote ? journalNote.slice(0, 280) : null,
+        })
+        .onConflictDoUpdate({
+          target: [schema.dailyCheckins.userId, schema.dailyCheckins.date],
+          set: {
+            mood: mood || null,
+            journalNote: journalNote ? journalNote.slice(0, 280) : null,
+            updatedAt: new Date(),
+          },
+        });
+      return { success: true };
+    } else {
+      const data = readLocalData();
+      const existingIdx = data.dailyCheckins.findIndex(
+        (c) => c.userId === userId && c.date === todayDate
+      );
+      const now = new Date().toISOString();
+      if (existingIdx >= 0) {
+        data.dailyCheckins[existingIdx].mood = mood || null;
+        data.dailyCheckins[existingIdx].journalNote = journalNote ? journalNote.slice(0, 280) : null;
+        data.dailyCheckins[existingIdx].updatedAt = now;
+      } else {
+        data.dailyCheckins.push({
+          id: crypto.randomUUID(),
+          userId,
+          date: todayDate,
+          completed: true,
+          mood: mood || null,
+          journalNote: journalNote ? journalNote.slice(0, 280) : null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      writeLocalData(data);
+      return { success: true };
+    }
   },
 
   // ----------------------------------------------------

@@ -78,15 +78,21 @@
   --theme-accent: #06b6d4;
 }
 
+html {
+  touch-action: pan-y;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  user-select: none;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
+  touch-action: pan-y;
+  overscroll-behavior-y: auto;
+  overflow-x: hidden;
 }
 
 /* iOS Safe Areas */
@@ -138,6 +144,6 @@ body {
 /* Prevent unwanted pull-to-refresh on iPhone Safari when inside PWA */
 html, body {
   position: relative;
-  overflow-x: hidden;
   min-height: 100%;
+  -webkit-overflow-scrolling: touch;
 }

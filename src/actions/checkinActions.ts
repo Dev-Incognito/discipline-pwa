@@ -33,6 +33,30 @@ export async function submitCheckinAction(payload: {
   }
 }
 
+export async function saveReflectionAction(payload: {
+  date: string;
+  mood?: 'difficult' | 'normal' | 'easy' | null;
+  journalNote?: string | null;
+}): Promise<{ success: boolean; error?: string }> {
+  const session = await getUserSession();
+  if (!session) {
+    return { success: false, error: 'Unauthorized.' };
+  }
+
+  try {
+    const res = await dataService.saveDailyReflection(
+      session.userId,
+      payload.date,
+      payload.mood,
+      payload.journalNote
+    );
+    return res;
+  } catch (err) {
+    console.error('Save reflection error:', err);
+    return { success: false, error: 'Failed to save reflection.' };
+  }
+}
+
 export async function getDashboardAction(todayDate: string) {
   const session = await getUserSession();
   if (!session) {
