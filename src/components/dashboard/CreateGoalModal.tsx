@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createGoalAction, updateGoalAction, deleteGoalAction } from '@/actions/goalActions';
 import { sound } from '@/lib/sound/sound';
-import { X, Loader2, Trash2 } from 'lucide-react';
+import { X, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { Goal } from '@/db/schema';
 
 interface CreateGoalModalProps {
